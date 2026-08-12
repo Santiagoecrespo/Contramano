@@ -1,5 +1,5 @@
-import { promptPreviews } from '../data/prompts'
-import type { Intensity, MockPlayer, MockRoom, MockRound, PromptPreview, Side } from '../types/game'
+import { activePrompts, promptPreviews } from '../data/prompts'
+import type { Intensity, MockDeck, MockPlayer, MockRoom, MockRound, PromptPreview, Side } from '../types/game'
 import { generateRoomCode } from './roomCode'
 
 const STORAGE_PREFIX = 'contramano:room:'
@@ -22,10 +22,51 @@ function shuffled<T>(items: T[], random: Random): T[] {
   return copy
 }
 
+function newDeck(intensity: Intensity, history: string[] = [], cycle = 1, random: Random = Math.random): MockDeck {
+  const recent = new Set(history.slice(-5))
+  const protectedIds = activePrompts(intensity).filter((prompt) => !recent.has(prompt.id)).map((prompt) => prompt.id)
+  const blockedIds = activePrompts(intensity).filter((prompt) => recent.has(prompt.id)).map((prompt) => prompt.id)
+  const safePrefix = shuffled(protectedIds, random)
+  const delayed = shuffled(blockedIds, random)
+  const firstTen = safePrefix.slice(0, 10)
+  const remaining = shuffled([...safePrefix.slice(10), ...delayed], random)
+  return { order: [...firstTen, ...remaining], cursor: 0, history, cycle }
+}
+
+function createDecks(random: Random = Math.random): MockRoom['decks'] {
+  return { tranqui: newDeck('tranqui', [], 1, random), bardo: newDeck('bardo', [], 1, random) }
+}
+
+function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.random): PromptPreview {
+  let deck = room.decks[intensity]
+  if (deck.cursor >= deck.order.length) {
+    deck = newDeck(intensity, deck.history, deck.cycle + 1, random)
+    room.decks[intensity] = deck
+  }
+  const recentIds = new Set(deck.history.slice(-10))
+  const lastCategory = deck.history.at(-1) ? promptPreviews.find((prompt) => prompt.id === deck.history.at(-1))?.category : undefined
+  let selectedIndex = deck.cursor
+  for (let index = deck.cursor; index < deck.order.length; index += 1) {
+    const candidate = promptPreviews.find((prompt) => prompt.id === deck.order[index])!
+    if (!recentIds.has(candidate.id) && candidate.category !== lastCategory) { selectedIndex = index; break }
+  }
+  if (selectedIndex === deck.cursor && lastCategory) {
+    for (let index = deck.cursor; index < deck.order.length; index += 1) {
+      const candidate = promptPreviews.find((prompt) => prompt.id === deck.order[index])!
+      if (!recentIds.has(candidate.id)) { selectedIndex = index; break }
+    }
+  }
+  ;[deck.order[deck.cursor], deck.order[selectedIndex]] = [deck.order[selectedIndex], deck.order[deck.cursor]]
+  const promptId = deck.order[deck.cursor]
+  deck.cursor += 1
+  deck.history.push(promptId)
+  return promptPreviews.find((prompt) => prompt.id === promptId)!
+}
+
 function normalizeRoom(room: MockRoom): MockRoom {
   return {
     ...room,
-    phase: room.phase ?? 'lobby', lastOddExtraSide: room.lastOddExtraSide ?? null,
+    phase: room.phase ?? 'lobby', lastOddExtraSide: room.lastOddExtraSide ?? null, decks: room.decks ?? createDecks(),
     players: room.players.map((player) => ({ ...player, score: player.score ?? 0, activeFromRound: player.activeFromRound ?? 1, juryRounds: player.juryRounds ?? 0 })),
     rounds: (room.rounds ?? []).map((round) => ({ ...round, jurorIds: round.jurorIds ?? [], wasRandomTiebreak: round.wasRandomTiebreak ?? false })),
   }
@@ -55,7 +96,7 @@ export function createMockRoom(nickname: string, intensity: Intensity): MockRoom
   while (getMockRoom(code)) code = generateRoomCode()
   const host: MockPlayer = { id: id(), nickname, isHost: true, score: 0, activeFromRound: 1, juryRounds: 0 }
   const now = new Date()
-  const room: MockRoom = { code, hostId: host.id, intensity, phase: 'lobby', players: [host], rounds: [], lastOddExtraSide: null, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + 86400000).toISOString() }
+  const room: MockRoom = { code, hostId: host.id, intensity, phase: 'lobby', players: [host], rounds: [], decks: createDecks(), lastOddExtraSide: null, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + 86400000).toISOString() }
   saveMockRoom(room); savePlayerSession(code, host.id); return room
 }
 
@@ -124,12 +165,6 @@ export function assignPostures(players: MockPlayer[], previousAssignments: Recor
   return { assignments, lastOddExtraSide: extraSide ?? lastOddExtraSide }
 }
 
-function pickPrompt(room: MockRoom): PromptPreview {
-  const used = new Set(room.rounds.map((round) => round.promptId))
-  const options = promptPreviews.filter((prompt) => prompt.intensity === room.intensity && !used.has(prompt.id))
-  return (options.length > 0 ? options : promptPreviews.filter((prompt) => prompt.intensity === room.intensity))[room.rounds.length % 12]
-}
-
 function beginRound(room: MockRoom, random: Random = Math.random): void {
   const number = room.rounds.length + 1
   const active = room.players.filter((player) => player.activeFromRound <= number)
@@ -140,7 +175,7 @@ function beginRound(room: MockRoom, random: Random = Math.random): void {
   const now = Date.now()
   jurors.forEach((juror) => { juror.juryRounds += 1 })
   room.lastOddExtraSide = allocation.lastOddExtraSide
-  const prompt = pickPrompt(room)
+  const prompt = nextPrompt(room, room.intensity, random)
   room.rounds.push({ number, promptId: prompt.id, prompt, jurorIds: jurors.map((juror) => juror.id), assignments: allocation.assignments, debateEndsAt: new Date(now + DEBATE_SECONDS * 1000).toISOString(), voteEndsAt: null, votes: [], changeRequests: [], result: undefined, wasRandomTiebreak: false })
   room.phase = 'debating'
 }
@@ -170,7 +205,8 @@ export function castMockVote(code: string, playerId: string, side: Side, random:
 
 export function closeMockVoting(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId === room.hostId && room.phase === 'voting') finalizeRound(room, random) }) }
 export function requestPromptChange(code: string, playerId: string): MockRoom | null { return mutateRoom(code, (room) => { if (room.phase !== 'debating') return; const round = currentRound(room); if (!(round.assignments[playerId] || round.jurorIds.includes(playerId))) return; if (!round.changeRequests.includes(playerId)) round.changeRequests.push(playerId) }) }
-export function confirmPromptChange(code: string, actorId: string): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'debating') return; const round = currentRound(room); if (round.changeRequests.length === 0) return; const next = promptPreviews.find((prompt) => prompt.intensity === room.intensity && prompt.id !== round.promptId); if (!next) return; round.prompt = next; round.promptId = next.id; round.changeRequests = []; round.debateEndsAt = new Date(Date.now() + DEBATE_SECONDS * 1000).toISOString() }) }
+export function confirmPromptChange(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'debating') return; const round = currentRound(room); if (round.changeRequests.length === 0) return; const next = nextPrompt(room, room.intensity, random); round.prompt = next; round.promptId = next.id; round.changeRequests = []; round.debateEndsAt = new Date(Date.now() + DEBATE_SECONDS * 1000).toISOString() }) }
+export function setMockIntensity(code: string, actorId: string, intensity: Intensity): MockRoom | null { return mutateRoom(code, (room) => { if (actorId === room.hostId && (room.phase === 'lobby' || room.phase === 'results')) room.intensity = intensity }) }
 export function continueMockGame(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'results') return; if (room.rounds.length >= 5) { room.phase = 'finished'; return }; beginRound(room, random) }) }
 export function rematchMockGame(code: string, actorId: string): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'finished') return; room.players.forEach((player) => { player.score = 0; player.activeFromRound = 1; player.juryRounds = 0 }); room.rounds = []; room.lastOddExtraSide = null; room.phase = 'lobby' }) }
 export const mockDurations = { debateSeconds: DEBATE_SECONDS, voteSeconds: VOTE_SECONDS }

@@ -8,6 +8,8 @@ Incluye landing mobile-first, creación y unión simuladas, lobby, QR, enlace de
 
 El juego local ya permite cinco rondas con **jurado rotativo**: la sala admite de 3 a 8 personas; con 3–5 juega un jurado y con 6–8, dos. El jurado no debate ni recibe postura, vota en privado y el resto se divide en equipos A/B balanceados. Si los dos jurados empatan, aparece “Desempate del caos” y se informa que la postura ganadora fue elegida aleatoriamente. Supabase todavía no está integrado.
 
+Cada sala crea dos mazos persistentes, uno `tranqui` y otro `bardo`. Las consignas se mezclan una vez, se consumen sin repetirse y el historial queda en `localStorage`. La revancha reinicia sólo la partida: continúa con la siguiente consigna del mazo. Al cambiar intensidad entre rondas, se retoma el mazo independiente de ese modo. Al agotarse, el mazo se remezcla y retrasa las últimas cinco consignas del ciclo anterior.
+
 ## Ejecutar
 
 ```powershell

@@ -5,7 +5,7 @@ import { QrModal } from '../components/QrModal'
 import {
   addDemoPlayers, advanceToVoting, castMockVote, closeMockVoting, confirmPromptChange,
   continueMockGame, getLocalPlayerId, getMockRoom, joinMockRoom,
-  MAX_PLAYERS, rematchMockGame, requestPromptChange, startMockGame,
+  MAX_PLAYERS, rematchMockGame, requestPromptChange, setMockIntensity, startMockGame,
 } from '../lib/mockRoom'
 import type { MockRoom, Side } from '../types/game'
 
@@ -126,7 +126,7 @@ export function RoomPage() {
           </aside>
         </section>}
 
-        {room.phase === 'results' && currentRound && <ResultScreen room={room} round={currentRound} isHost={isHost} onContinue={() => update(continueMockGame(room.code, room.hostId))} />}
+        {room.phase === 'results' && currentRound && <ResultScreen room={room} round={currentRound} isHost={isHost} onIntensity={(intensity) => update(setMockIntensity(room.code, room.hostId, intensity))} onContinue={() => update(continueMockGame(room.code, room.hostId))} />}
         {room.phase === 'finished' && <FinishedScreen players={rankedPlayers} isHost={isHost} onRematch={() => update(rematchMockGame(room.code, room.hostId))} />}
       </section>
       {showQr && <QrModal url={roomUrl} onClose={() => setShowQr(false)} />}
@@ -155,11 +155,11 @@ function PlayerScoreboard({ players, localPlayerId }: { players: MockRoom['playe
   return <section className="scoreboard"><p className="eyebrow">PUNTAJE</p>{players.map((player, index) => <div className={player.id === localPlayerId ? 'score-row is-me' : 'score-row'} key={player.id}><span>{index + 1}. {player.nickname}</span><b>{player.score}</b></div>)}</section>
 }
 
-function ResultScreen({ room, round, isHost, onContinue }: { room: MockRoom; round: NonNullable<MockRoom['rounds'][number]>; isHost: boolean; onContinue: () => void }) {
+function ResultScreen({ room, round, isHost, onIntensity, onContinue }: { room: MockRoom; round: NonNullable<MockRoom['rounds'][number]>; isHost: boolean; onIntensity: (intensity: MockRoom['intensity']) => void; onContinue: () => void }) {
   const sideLabel = round.result === 'A' ? round.prompt.sideA : round.prompt.sideB
   const votesA = round.votes.filter((vote) => vote.side === 'A').length
   const votesB = round.votes.filter((vote) => vote.side === 'B').length
-  return <section className="result-screen"><p className="eyebrow">RESULTADO · RONDA {round.number}</p><h2>Veredicto del jurado</h2>{round.wasRandomTiebreak && <div className="chaos-tiebreak"><b>Desempate del caos</b><span>El jurado quedó empatado: la postura ganadora salió al azar.</span></div>}<div className="result-badge">{sideLabel}</div><p>{votesA} votos para <b>{round.prompt.sideA}</b> · {votesB} para <b>{round.prompt.sideB}</b></p><PlayerScoreboard players={[...room.players].sort((a, b) => b.score - a.score)} localPlayerId="" />{isHost && <button className="button button-primary result-action" onClick={onContinue}>{round.number === 5 ? 'Ver ranking final' : 'Siguiente ronda'} <span aria-hidden="true">→</span></button>}</section>
+  return <section className="result-screen"><p className="eyebrow">RESULTADO · RONDA {round.number}</p><h2>Veredicto del jurado</h2>{round.wasRandomTiebreak && <div className="chaos-tiebreak"><b>Desempate del caos</b><span>El jurado quedó empatado: la postura ganadora salió al azar.</span></div>}<div className="result-badge">{sideLabel}</div><p>{votesA} votos para <b>{round.prompt.sideA}</b> · {votesB} para <b>{round.prompt.sideB}</b></p><PlayerScoreboard players={[...room.players].sort((a, b) => b.score - a.score)} localPlayerId="" />{isHost && <><div className="intensity-switch" aria-label="Intensidad de la siguiente ronda"><span>Siguiente ronda:</span><button className={room.intensity === 'tranqui' ? 'selected' : ''} onClick={() => onIntensity('tranqui')}>Tranqui</button><button className={room.intensity === 'bardo' ? 'selected bardo' : ''} onClick={() => onIntensity('bardo')}>Modo Bardo</button></div><button className="button button-primary result-action" onClick={onContinue}>{round.number === 5 ? 'Ver ranking final' : 'Siguiente ronda'} <span aria-hidden="true">→</span></button></>}</section>
 }
 
 function FinishedScreen({ players, isHost, onRematch }: { players: MockRoom['players']; isHost: boolean; onRematch: () => void }) {
