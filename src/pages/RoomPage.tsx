@@ -5,7 +5,7 @@ import { QrModal } from '../components/QrModal'
 import {
   addDemoPlayers, advanceToVoting, castMockVote, closeMockVoting, confirmPromptChange,
   continueMockGame, getLocalPlayerId, getMockRoom, joinMockRoom,
-  rematchMockGame, requestPromptChange, startMockGame,
+  MAX_PLAYERS, rematchMockGame, requestPromptChange, startMockGame,
 } from '../lib/mockRoom'
 import type { MockRoom, Side } from '../types/game'
 
@@ -24,6 +24,7 @@ export function RoomPage() {
   const [showQr, setShowQr] = useState(false)
   const [now, setNow] = useState(Date.now())
   const [joinNickname, setJoinNickname] = useState('')
+  const [joinError, setJoinError] = useState('')
   const roomUrl = `${window.location.origin}/sala/${code}`
   const localPlayer = room?.players.find((player) => player.id === localPlayerId) ?? null
   const currentRound = room?.rounds.at(-1)
@@ -54,7 +55,8 @@ export function RoomPage() {
   function joinFromLink(event: FormEvent) {
     event.preventDefault()
     const next = joinMockRoom(code, joinNickname.trim())
-    if (!next) return
+    const joined = next?.players.some((player) => player.nickname.toLowerCase() === joinNickname.trim().toLowerCase())
+    if (!next || !joined) { setJoinError('La sala está completa: admite hasta 8 jugadores.'); return }
     setLocalPlayerId(getLocalPlayerId(code))
     update(next)
   }
@@ -63,7 +65,7 @@ export function RoomPage() {
     if (!room || !currentRound) return
     let next: MockRoom | null = room
     const votes = currentRound.votes.map((vote) => vote.playerId)
-    Object.entries(currentRound.assignments).filter(([playerId]) => !votes.includes(playerId)).forEach(([playerId], index) => {
+    currentRound.jurorIds.filter((playerId) => !votes.includes(playerId)).forEach((playerId, index) => {
       next = castMockVote(room.code, playerId, index % 2 === 0 ? 'A' : 'B')
     })
     update(next)
@@ -81,6 +83,7 @@ export function RoomPage() {
           <form className="form-card" onSubmit={joinFromLink}>
             <label htmlFor="shared-nickname">Tu apodo</label>
             <input id="shared-nickname" autoFocus maxLength={16} value={joinNickname} onChange={(event) => setJoinNickname(event.target.value)} placeholder="Cómo te dicen" />
+            {joinError && <p className="form-error" role="alert">{joinError}</p>}
             <button className="button button-primary form-submit" type="submit" disabled={joinNickname.trim().length < 2}>Entrar a la mesa <span aria-hidden="true">→</span></button>
             <p className="microcopy">No instalás nada. Jugás desde este link.</p>
           </form>
@@ -91,6 +94,7 @@ export function RoomPage() {
 
   const canStart = room.players.length >= 3
   const mySide = currentRound?.assignments[localPlayer.id]
+  const amJuror = currentRound?.jurorIds.includes(localPlayer.id) ?? false
   const myVote = currentRound?.votes.find((vote) => vote.playerId === localPlayer.id)
   const debateRemaining = timeLeft(currentRound?.debateEndsAt ?? null, now)
   const votingRemaining = timeLeft(currentRound?.voteEndsAt ?? null, now)
@@ -103,7 +107,7 @@ export function RoomPage() {
         {room.phase === 'lobby' && <Lobby room={room} isHost={isHost} canStart={canStart} onStart={() => update(startMockGame(room.code, room.hostId))} onDemo={() => update(addDemoPlayers(room.code))} onQr={() => setShowQr(true)} onShare={shareWhatsApp} />}
 
         {room.phase === 'debating' && currentRound && <section className="game-layout">
-          <RoundCard round={currentRound} side={mySide} timer={displayTime(debateRemaining)} label="Tiempo para el bardo" />
+          <RoundCard round={currentRound} side={mySide} isJuror={amJuror} timer={displayTime(debateRemaining)} label="Tiempo para el bardo" />
           <aside className="game-sidebar">
             <PlayerScoreboard players={rankedPlayers} localPlayerId={localPlayer.id} />
             <section className="control-card"><p className="eyebrow">CAMBIAR CONSIGNA</p>{currentRound.changeRequests.length > 0 ? <p><b>{currentRound.changeRequests.length} persona{currentRound.changeRequests.length > 1 ? 's pidieron' : ' pidió'} cambiarla.</b></p> : <p>Si la consigna no va, pedí otra sin explicaciones.</p>}
@@ -115,9 +119,9 @@ export function RoomPage() {
         </section>}
 
         {room.phase === 'voting' && currentRound && <section className="game-layout">
-          <RoundCard round={currentRound} side={mySide} timer={displayTime(votingRemaining)} label="La mesa está votando" compact />
+          <RoundCard round={currentRound} side={mySide} isJuror={amJuror} timer={displayTime(votingRemaining)} label="El jurado está deliberando" compact />
           <aside className="game-sidebar">
-            <section className="vote-card"><p className="eyebrow">VOTO PRIVADO</p><h2>¿Qué postura fue mejor defendida?</h2>{myVote ? <p className="vote-confirmation">Tu voto quedó guardado. Esperando al resto…</p> : <div className="vote-buttons"><button onClick={() => update(castMockVote(room.code, localPlayer.id, 'A'))}>{currentRound.prompt.sideA}</button><button onClick={() => update(castMockVote(room.code, localPlayer.id, 'B'))}>{currentRound.prompt.sideB}</button></div>}<p className="vote-progress">{currentRound.votes.length} de {Object.keys(currentRound.assignments).length} votos</p></section>
+            {amJuror ? <section className="vote-card"><p className="eyebrow">VOTO PRIVADO DEL JURADO</p><h2>¿Qué postura fue mejor defendida?</h2>{myVote ? <p className="vote-confirmation">Tu veredicto quedó guardado. Esperando al resto del jurado…</p> : <div className="vote-buttons"><button onClick={() => update(castMockVote(room.code, localPlayer.id, 'A'))}>{currentRound.prompt.sideA}</button><button onClick={() => update(castMockVote(room.code, localPlayer.id, 'B'))}>{currentRound.prompt.sideB}</button></div>}<p className="vote-progress">{currentRound.votes.length} de {currentRound.jurorIds.length} voto{currentRound.jurorIds.length > 1 ? 's' : ''} del jurado</p></section> : <section className="control-card jury-wait"><p className="eyebrow">EL JURADO DELIBERA</p><h2>Ahora escuchan y deciden ellos.</h2><p>Tu equipo ya hizo lo suyo. No votás esta ronda.</p></section>}
             {isHost && <section className="control-card host-card"><p className="eyebrow">DEMO LOCAL</p><button className="button button-secondary full-width" onClick={completeDemoVotes}>Completar votos de demo</button><button className="button button-dark full-width" onClick={() => update(closeMockVoting(room.code, room.hostId))}>Cerrar y mostrar resultado</button></section>}
           </aside>
         </section>}
@@ -134,13 +138,13 @@ function Lobby({ room, isHost, canStart, onStart, onDemo, onQr, onShare }: { roo
   return <div className="room-grid"><section className="lobby-card"><div className="lobby-card-top"><div><p className="eyebrow">JUGADORES</p><h2>{room.players.length} {room.players.length === 1 ? 'persona' : 'personas'} en la mesa</h2></div><span className="live-dot">En lobby</span></div><PlayerList players={room.players} />
     {room.players.length === 1 && <div className="waiting-message"><b>Creaste la mesa.</b><span>Compartí el QR o el link para sumar gente.</span></div>}
     {room.players.length === 2 && <div className="waiting-message"><b>Falta una persona para empezar.</b><span>Mandá el link al grupo y listo.</span></div>}
-    {canStart && <div className="ready-message"><b>Ya pueden arrancar.</b><span>Hay equipo suficiente para una buena discusión.</span></div>}
+    {canStart && <div className="ready-message"><b>Ya pueden arrancar.</b><span>En cada ronda alguien será jurado y el resto defenderá una postura.</span></div>}
     {isHost && <button className="button button-dark full-width" disabled={!canStart} onClick={onStart}>Empezar partida <span aria-hidden="true">→</span></button>}
-  </section><aside className="share-card"><p className="eyebrow">INVITÁ A LA MESA</p><h2>Un link y adentro.</h2><p>Abren desde el celu, ponen apodo y juegan. No tienen que instalar nada.</p><button className="button button-primary full-width" onClick={onQr}>Mostrar QR</button><button className="button button-secondary full-width" onClick={onShare}>Compartir por WhatsApp</button>{isHost && <button className="text-button" onClick={onDemo}>Sumar jugadores de demo</button>}</aside></div>
+  </section><aside className="share-card"><p className="eyebrow">INVITÁ A LA MESA</p><h2>Un link y adentro.</h2><p>Abren desde el celu, ponen apodo y juegan. La mesa admite de 3 a {MAX_PLAYERS} personas.</p><button className="button button-primary full-width" onClick={onQr}>Mostrar QR</button><button className="button button-secondary full-width" onClick={onShare}>Compartir por WhatsApp</button>{room.players.length >= MAX_PLAYERS ? <p className="room-full">Sala completa: ya son {MAX_PLAYERS}.</p> : isHost && <button className="text-button" onClick={onDemo}>Completar mesa de demo</button>}</aside></div>
 }
 
-function RoundCard({ round, side, timer, label, compact = false }: { round: NonNullable<MockRoom['rounds'][number]>; side: Side | undefined; timer: string; label: string; compact?: boolean }) {
-  return <section className={compact ? 'round-card compact' : 'round-card'}><div className="round-top"><span className="tag tag-blue">{round.prompt.category}</span><span className="timer"><i />{timer}</span></div><p className="eyebrow">{label}</p><h2>{round.prompt.text}</h2><div className="my-side"><span>TE TOCÓ DEFENDER</span><strong className={side === 'A' ? 'side-a' : 'side-b'}>{side === 'A' ? round.prompt.sideA : round.prompt.sideB}</strong><small>No importa si estás de acuerdo: esa es la gracia.</small></div></section>
+function RoundCard({ round, side, isJuror, timer, label, compact = false }: { round: NonNullable<MockRoom['rounds'][number]>; side: Side | undefined; isJuror: boolean; timer: string; label: string; compact?: boolean }) {
+  return <section className={compact ? 'round-card compact' : 'round-card'}><div className="round-top"><span className="tag tag-blue">{round.prompt.category}</span><span className="timer"><i />{timer}</span></div><p className="eyebrow">{label}</p><h2>{round.prompt.text}</h2>{isJuror ? <div className="jury-role"><span>ROL DE ESTA RONDA</span><strong>Sos jurado</strong><small>Escuchá, detectá chamuyo y decidí el veredicto.</small></div> : <div className="my-side"><span>TE TOCÓ DEFENDER</span><strong className={side === 'A' ? 'side-a' : 'side-b'}>{side === 'A' ? round.prompt.sideA : round.prompt.sideB}</strong><small>No importa si estás de acuerdo: esa es la gracia.</small></div>}</section>
 }
 
 function PlayerList({ players }: { players: MockRoom['players'] }) {
@@ -152,10 +156,10 @@ function PlayerScoreboard({ players, localPlayerId }: { players: MockRoom['playe
 }
 
 function ResultScreen({ room, round, isHost, onContinue }: { room: MockRoom; round: NonNullable<MockRoom['rounds'][number]>; isHost: boolean; onContinue: () => void }) {
-  const sideLabel = round.result === 'A' ? round.prompt.sideA : round.result === 'B' ? round.prompt.sideB : null
+  const sideLabel = round.result === 'A' ? round.prompt.sideA : round.prompt.sideB
   const votesA = round.votes.filter((vote) => vote.side === 'A').length
   const votesB = round.votes.filter((vote) => vote.side === 'B').length
-  return <section className="result-screen"><p className="eyebrow">RESULTADO · RONDA {round.number}</p><h2>{sideLabel ? 'La postura elegida por la mesa' : 'La mesa quedó dividida'}</h2><div className="result-badge">{sideLabel ?? 'Empate'}</div><p>{votesA} votos para <b>{round.prompt.sideA}</b> · {votesB} para <b>{round.prompt.sideB}</b></p><PlayerScoreboard players={[...room.players].sort((a, b) => b.score - a.score)} localPlayerId="" />{isHost && <button className="button button-primary result-action" onClick={onContinue}>{round.number === 5 ? 'Ver ranking final' : 'Siguiente ronda'} <span aria-hidden="true">→</span></button>}</section>
+  return <section className="result-screen"><p className="eyebrow">RESULTADO · RONDA {round.number}</p><h2>Veredicto del jurado</h2>{round.wasRandomTiebreak && <div className="chaos-tiebreak"><b>Desempate del caos</b><span>El jurado quedó empatado: la postura ganadora salió al azar.</span></div>}<div className="result-badge">{sideLabel}</div><p>{votesA} votos para <b>{round.prompt.sideA}</b> · {votesB} para <b>{round.prompt.sideB}</b></p><PlayerScoreboard players={[...room.players].sort((a, b) => b.score - a.score)} localPlayerId="" />{isHost && <button className="button button-primary result-action" onClick={onContinue}>{round.number === 5 ? 'Ver ranking final' : 'Siguiente ronda'} <span aria-hidden="true">→</span></button>}</section>
 }
 
 function FinishedScreen({ players, isHost, onRematch }: { players: MockRoom['players']; isHost: boolean; onRematch: () => void }) {

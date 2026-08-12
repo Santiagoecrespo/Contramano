@@ -8,6 +8,7 @@ export type MockPlayer = {
   isHost: boolean
   score: number
   activeFromRound: number
+  juryRounds: number
 }
 
 export type PromptPreview = {
@@ -28,12 +29,14 @@ export type MockRound = {
   number: number
   promptId: string
   prompt: PromptPreview
+  jurorIds: string[]
   assignments: Record<string, Side>
   debateEndsAt: string
   voteEndsAt: string | null
   votes: MockVote[]
   changeRequests: string[]
-  result: Side | null | undefined
+  result: Side | undefined
+  wasRandomTiebreak: boolean
 }
 
 export type MockRoom = {

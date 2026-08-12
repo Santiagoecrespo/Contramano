@@ -12,8 +12,9 @@ export function JoinRoomPage() {
   function joinRoom(event: FormEvent) {
     event.preventDefault()
     const room = joinMockRoom(code.trim().toUpperCase(), nickname.trim())
-    if (!room || nickname.trim().length < 2) {
-      setError('Revisá el código y usá un apodo de al menos 2 caracteres.')
+    const joined = room?.players.some((player) => player.nickname.toLowerCase() === nickname.trim().toLowerCase())
+    if (!room || !joined || nickname.trim().length < 2) {
+      setError(room && !joined ? 'La sala está completa: admite hasta 8 jugadores.' : 'Revisá el código y usá un apodo de al menos 2 caracteres.')
       return
     }
     navigate(`/sala/${room.code}`)
@@ -36,4 +37,3 @@ export function JoinRoomPage() {
     </Layout>
   )
 }
-
