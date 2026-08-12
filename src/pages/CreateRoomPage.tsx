@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { createMockRoom } from '../lib/mockRoom'
+import { createRoom } from '../lib/gameService'
 import type { Intensity } from '../types/game'
 
 export function CreateRoomPage() {
@@ -10,15 +10,19 @@ export function CreateRoomPage() {
   const [intensity, setIntensity] = useState<Intensity>('tranqui')
   const [error, setError] = useState('')
 
-  function createRoom(event: FormEvent) {
+  async function handleCreateRoom(event: FormEvent) {
     event.preventDefault()
     const cleanNickname = nickname.trim()
     if (cleanNickname.length < 2 || cleanNickname.length > 16) {
       setError('Usá un apodo de 2 a 16 caracteres.')
       return
     }
-    const room = createMockRoom(cleanNickname, intensity)
-    navigate(`/sala/${room.code}`)
+    try {
+      const room = await createRoom(cleanNickname, intensity)
+      navigate(`/sala/${room.code}`)
+    } catch {
+      setError('No pudimos crear la sala. Probá de nuevo.')
+    }
   }
 
   return (
@@ -26,7 +30,7 @@ export function CreateRoomPage() {
       <section className="form-page">
         <p className="eyebrow">NUEVA MESA</p>
         <h1>Que empiece el desacuerdo.</h1>
-        <form className="form-card" onSubmit={createRoom}>
+        <form className="form-card" onSubmit={handleCreateRoom}>
           <label htmlFor="nickname">¿Cómo te decimos?</label>
           <input id="nickname" autoFocus maxLength={16} value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="Tu apodo" />
           <fieldset>
@@ -44,4 +48,3 @@ export function CreateRoomPage() {
     </Layout>
   )
 }
-

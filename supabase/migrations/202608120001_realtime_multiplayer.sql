@@ -1,0 +1,237 @@
+-- Contramano Hito 3. Ejecutar completo en Supabase SQL Editor como postgres.
+create extension if not exists pgcrypto;
+
+create table if not exists public.rooms (
+  id uuid primary key default gen_random_uuid(),
+  code text not null unique check (code ~ '^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$'),
+  host_player_id uuid, intensity text not null default 'tranqui' check (intensity in ('tranqui','bardo')),
+  phase text not null default 'lobby' check (phase in ('lobby','playing','paused','finished','cancelled')),
+  round_count integer not null default 0 check (round_count between 0 and 5),
+  last_odd_extra_side text check (last_odd_extra_side in ('A','B')),
+  version integer not null default 1, created_at timestamptz not null default now(), expires_at timestamptz not null default now() + interval '24 hours'
+);
+create table if not exists public.players (
+  id uuid primary key default gen_random_uuid(), room_id uuid not null references public.rooms(id) on delete cascade,
+  auth_user_id uuid not null references auth.users(id) on delete cascade, nickname text not null check (char_length(nickname) between 2 and 16),
+  is_host boolean not null default false, score integer not null default 0, jury_rounds integer not null default 0,
+  active_from_round integer not null default 1, joined_at timestamptz not null default now(), unique(room_id, auth_user_id)
+);
+create unique index if not exists players_room_nickname_unique on public.players(room_id, lower(nickname));
+alter table public.rooms add constraint rooms_host_player_fk foreign key (host_player_id) references public.players(id) deferrable initially deferred;
+create table if not exists public.prompts (
+  id text primary key, category text not null, intensity text not null check (intensity in ('tranqui','bardo')),
+  status text not null default 'active' check (status in ('active','reserve')), text text not null, side_a text not null, side_b text not null
+);
+create table if not exists public.rules (id uuid primary key default gen_random_uuid(), text text not null, active boolean not null default true);
+create table if not exists public.prompt_decks (
+  room_id uuid not null references public.rooms(id) on delete cascade, intensity text not null check (intensity in ('tranqui','bardo')),
+  deck text[] not null default '{}', cursor integer not null default 0, history text[] not null default '{}', cycle integer not null default 1,
+  primary key(room_id,intensity)
+);
+create table if not exists public.rounds (
+  id uuid primary key default gen_random_uuid(), room_id uuid not null references public.rooms(id) on delete cascade, number integer not null,
+  prompt_id text not null references public.prompts(id), phase text not null check (phase in ('debating','voting','results','skipped')),
+  started_at timestamptz not null default now(), ends_at timestamptz not null, vote_ends_at timestamptz,
+  result text check (result in ('A','B')), was_random_tiebreak boolean not null default false, unique(room_id,number)
+);
+create table if not exists public.round_players (
+  round_id uuid not null references public.rounds(id) on delete cascade, player_id uuid not null references public.players(id) on delete cascade,
+  role text not null check (role in ('juror','debater')), side text check (side in ('A','B')), point_awarded boolean not null default false,
+  primary key(round_id,player_id), check ((role='juror' and side is null) or (role='debater' and side is not null))
+);
+create table if not exists public.votes (
+  id uuid primary key default gen_random_uuid(), round_id uuid not null references public.rounds(id) on delete cascade,
+  player_id uuid not null references public.players(id) on delete cascade, side text not null check (side in ('A','B')), created_at timestamptz not null default now(), unique(round_id,player_id)
+);
+create table if not exists public.prompt_change_requests (id uuid primary key default gen_random_uuid(), round_id uuid not null references public.rounds(id) on delete cascade, player_id uuid not null references public.players(id) on delete cascade, created_at timestamptz not null default now(), unique(round_id,player_id));
+create table if not exists public.events (id bigint generated always as identity primary key, room_id uuid references public.rooms(id) on delete cascade, player_id uuid references public.players(id) on delete set null, name text not null, metadata jsonb not null default '{}', created_at timestamptz not null default now());
+create index if not exists players_room_idx on public.players(room_id); create index if not exists rounds_room_idx on public.rounds(room_id,number desc); create index if not exists events_room_name_idx on public.events(room_id,name,created_at desc);
+
+create or replace function public.is_room_member(p_room uuid) returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from players where room_id=p_room and auth_user_id=auth.uid()) $$;
+alter table public.rooms enable row level security; alter table public.players enable row level security; alter table public.prompts enable row level security; alter table public.rules enable row level security; alter table public.prompt_decks enable row level security; alter table public.rounds enable row level security; alter table public.round_players enable row level security; alter table public.votes enable row level security; alter table public.prompt_change_requests enable row level security; alter table public.events enable row level security;
+create policy "members read rooms" on public.rooms for select to authenticated using (public.is_room_member(id));
+create policy "members read players" on public.players for select to authenticated using (public.is_room_member(room_id));
+create policy "members read rounds" on public.rounds for select to authenticated using (public.is_room_member(room_id));
+create policy "members read round players" on public.round_players for select to authenticated using (exists(select 1 from rounds r where r.id=round_id and public.is_room_member(r.room_id)));
+create policy "members read prompts" on public.prompts for select to authenticated using (true);
+create policy "members read requests" on public.prompt_change_requests for select to authenticated using (exists(select 1 from rounds r where r.id=round_id and public.is_room_member(r.room_id)));
+create policy "jurors read own vote or closed round" on public.votes for select to authenticated using (player_id in (select id from players where auth_user_id=auth.uid()) or exists(select 1 from rounds where id=round_id and phase='results'));
+-- No direct client writes: only security-definer RPCs below have mutation privileges.
+
+-- 30 active cards per mode. Reserve cards remain in the client editorial catalog and are not dealt in MVP cycles.
+insert into public.prompts(id,category,intensity,text,side_a,side_b) values
+('asado-tarde','Asado','tranqui','Llegar media hora tarde a un asado no cuenta como llegar tarde.','Cuenta','No cuenta'),('panera','Comida','tranqui','El pan de la panera se come antes de que llegue la comida.','Obvio','Se espera'),('audio-largo','Hábitos','tranqui','Mandar un audio de más de dos minutos es un acto de violencia.','Es','Exageran'),('cocina-lava','Convivencia','tranqui','El que cocina no debería lavar.','No lava','Lava igual'),('menu-antes','Salidas','tranqui','Mirar el menú antes de llegar al restaurante es de persona organizada.','Organizada','Ansiosa'),('pelicula-larga','Series','tranqui','Una película larga puede ser buena igual.','Puede','No da'),('mate-excusa','Mate','tranqui','El mate es más excusa para hablar que bebida.','Excusa','Bebida'),('juego-reglas','Juegos','tranqui','El que pierde en un juego no tiene derecho a cambiar las reglas.','No tiene','Puede'),('super-hambre','Comida','tranqui','Ir al supermercado con hambre siempre termina mal.','Siempre','Se puede'),('grupo-nombre','Amistades','tranqui','Un grupo sin nombre raro no es un grupo de verdad.','No es','Da igual'),('celular-cama','Hábitos','tranqui','Dormir con el celular en la mano cuenta como usarlo antes de dormir.','Cuenta','No cuenta'),('siesta','Hábitos','tranqui','Una siesta de veinte minutos siempre termina siendo de dos horas.','Siempre','Se controla'),('pizza-fria','Comida','tranqui','La pizza fría del día siguiente es mejor que recién hecha.','Mejor','Jamás'),('no-se-comer','Comida','tranqui','Decir no sé qué comer y rechazar todo debería tener consecuencias.','Debería','Qué drama'),('maneja-musica','Música','tranqui','El que maneja tiene derecho a elegir la música.','Tiene','No tiene'),('memes','Redes','tranqui','Los memes explican mejor algunas cosas que una conversación seria.','Mejor','Ni ahí'),('previa-boliche','Previa','tranqui','Una buena previa es mejor que ir al boliche.','Sí','No'),('mate-lavado','Mate','tranqui','El mate lavado se toma igual.','Se toma','Se cambia'),('delivery-personalidad','Comida','tranqui','Pedir siempre lo mismo es tener personalidad, no falta de imaginación.','Personalidad','Falta de ideas'),('musica-prioridad','Música','tranqui','Quien pone música tiene prioridad para elegir.','Tiene','No tiene'),('truco-falta','Juegos','tranqui','Cantar falta envido sin cartas es una estrategia válida.','Vale','No vale'),('series-dobladas','Series','tranqui','Ver una serie doblada no la arruina.','No arruina','Arruina'),('previa-hora','Previa','tranqui','La hora de una previa es decorativa.','Decorativa','Se respeta'),('ya-salgo','Hábitos','tranqui','Decir ya estoy saliendo mientras seguís en tu casa no es mentir.','No es','Es chamuyo'),('viaje-improvisar','Viajes','tranqui','En un viaje, improvisar el plan es mejor que organizarlo.','Improvisar','Organizar'),('facultad-leer','Facultad','tranqui','Llegar sin haber leído igual cuenta como ir a clase.','Cuenta','No cuenta'),('playlist-viaje','Viajes','tranqui','Armar playlist para un viaje es parte del viaje.','Es parte','No tanto'),('capitulo-uno','Series','tranqui','Ver un capítulo más nunca significa uno solo.','Nunca','A veces'),('lavar-platos','Convivencia','tranqui','Dejar los platos en remojo es lavarlos a futuro.','Sí','No'),('trabajo-camara','Trabajo','tranqui','Tener la cámara apagada en una reunión mejora la reunión.','Mejora','Empeora'),
+('cancelar-multa','Planes','bardo','Cancelar el mismo día debería tener multa.','Sí','No'),('desaparece-pide','Amistades','bardo','El que desaparece del grupo y vuelve solo para pedir algo debería pagar multa.','Debería','Exageran'),('hagan-lo-que','Planes','bardo','Decir hacemos lo que quieran y después criticar el plan es imperdonable.','Lo es','Se puede'),('tres-dias','Amistades','bardo','Si tardás tres días en contestar, perdiste el derecho a preguntar por qué no te avisaron.','Perdiste','No'),('plata-opina','Salidas','bardo','El que no pone plata pero opina del lugar no tiene voto.','No tiene','Sí tiene'),('extra-sin-avisar','Planes','bardo','Llegar sin avisar con alguien extra cambia todo el plan.','Lo cambia','No tanto'),('jajaj-rendirse','Amistades','bardo','Mandar jajaj después de una discusión es una forma de rendirse.','Lo es','No'),('cumple-invitar','Amistades','bardo','El que organiza un cumpleaños tiene derecho a elegir a quién no invitar.','Tiene','No tiene'),('foto-irse','Salidas','bardo','Pedir una foto grupal cuando todos ya se quieren ir debería estar prohibido.','Prohibido','Es tradición'),('no-tomo','Hábitos','bardo','Cuando alguien dice no tomo mucho, generalmente hay que preocuparse.','Hay que','No tanto'),('vetar-comida','Comida','bardo','Si no sabés qué querés comer, no podés vetar opciones ajenas.','No podés','Podés'),('paga-persigue','Dinero','bardo','El que se ofrece a pagar y después persigue la transferencia es peligroso.','Peligroso','Ordenado'),('queda-bien','Salidas','bardo','Un amigo que te dice te queda bien antes de salir no siempre está ayudando.','No siempre','Siempre'),('jaja-mal','Redes','bardo','Responder jaja mal no cuenta como seguir una conversación.','No cuenta','Cuenta'),('cancion-cambiar','Música','bardo','El que no conoce una canción no puede pedir que la cambien.','No puede','Puede'),('salida-sin-fotos','Redes','bardo','Una salida puede estar buena aunque no haya fotos para subir.','Obvio','No tanto'),('tarde-suspension','Puntualidad','bardo','El grupo puede suspender al que siempre llega último.','Puede','No puede'),('fuego-chamuyo','Redes','bardo','Responder una historia solo con fuego es chamuyo.','Es','No es'),('parlante-opinar','Música','bardo','Quien monopoliza el parlante pierde derecho a opinar.','Pierde','No pierde'),('viaje-responsable','Viajes','bardo','En un viaje alguien debe ser responsable aunque nadie lo elija.','Debe','No debe'),('silenciar-grupo','Amistades','bardo','Silenciar el grupo una semana es completamente válido.','Válido','Exagerado'),('calculadora-salida','Salidas','bardo','El que saca la calculadora para dividir una salida le baja el ánimo a cualquiera.','Lo baja','No'),('historias-todo','Redes','bardo','Si subiste todo a historias, medio que ya no estuviste ahí.','Tal cual','Nada que ver'),('apuntes-explicar','Facultad','bardo','Compartir apuntes no obliga a explicar todo después.','No obliga','Obliga'),('mejores-amigos','Celos cotidianos','bardo','Tener mejores amigos en redes es innecesario.','Innecesario','Normal'),('casa-ajena','Convivencia','bardo','En casa ajena, el que abre la heladera sin preguntar ya cruzó una línea.','La cruzó','Exageran'),('previa-enemigo','Previa','bardo','El que quiere una previa tranqui es el más peligroso de la noche.','Siempre','Nunca'),('juego-enojado','Juegos','bardo','Enojarse por perder un juego arruina más que hacer trampa.','Arruina más','No'),('asado-vegetariano','Asado','bardo','Llevar algo vegetariano a un asado no te exime de traer postre.','No exime','Sí exime'),('salida-cerrar','Salidas','bardo','El que propone irse debería encargarse de cerrar la cuenta.','Debería','No') on conflict (id) do update set category=excluded.category,intensity=excluded.intensity,text=excluded.text,side_a=excluded.side_a,side_b=excluded.side_b;
+
+create or replace function public.assert_live_room(p_room uuid) returns public.rooms language plpgsql security definer set search_path=public as $$ declare r rooms; begin select * into r from rooms where id=p_room for update; if not found then raise exception 'Sala no encontrada'; end if; if r.expires_at<=now() then raise exception 'Sala vencida'; end if; if not exists(select 1 from players where room_id=p_room and auth_user_id=auth.uid()) then raise exception 'No pertenecés a esta sala'; end if; return r; end $$;
+create or replace function public.viewer_player(p_room uuid) returns uuid language sql stable security definer set search_path=public as $$ select id from players where room_id=p_room and auth_user_id=auth.uid() $$;
+create or replace function public.deal_prompt(p_room uuid,p_intensity text) returns text language plpgsql security definer set search_path=public as $$
+declare d prompt_decks; chosen text; chosen_position integer; last_category text; recent text[]; displaced text;
+begin
+  select * into d from prompt_decks where room_id=p_room and intensity=p_intensity for update;
+  if d.cursor>=coalesce(array_length(d.deck,1),0) then
+    d.deck:=array(select id from prompts where intensity=p_intensity and status='active' order by random()); d.cursor:=0; d.cycle:=d.cycle+1;
+  end if;
+  recent:=case when coalesce(array_length(d.history,1),0)>0 then d.history[greatest(array_length(d.history,1)-9,1):array_length(d.history,1)] else array[]::text[] end;
+  select category into last_category from prompts where id=d.history[array_length(d.history,1)];
+  select d.deck[i],i into chosen,chosen_position from generate_subscripts(d.deck,1) i join prompts p on p.id=d.deck[i]
+    where i>d.cursor and not(d.deck[i]=any(recent)) and p.category is distinct from last_category order by i limit 1;
+  if chosen is null then
+    select d.deck[i],i into chosen,chosen_position from generate_subscripts(d.deck,1) i where i>d.cursor and not(d.deck[i]=any(recent)) order by i limit 1;
+  end if;
+  if chosen is null then chosen:=d.deck[d.cursor+1]; chosen_position:=d.cursor+1; end if;
+  displaced:=d.deck[d.cursor+1]; d.deck[d.cursor+1]:=chosen; d.deck[chosen_position]:=case when chosen_position=d.cursor+1 then chosen else displaced end;
+  d.cursor:=d.cursor+1; d.history:=array_append(d.history,chosen);
+  update prompt_decks set deck=d.deck,cursor=d.cursor,history=d.history,cycle=d.cycle where room_id=p_room and intensity=p_intensity;
+  return chosen;
+end $$;
+
+create or replace function public.resolve_room(p_ref text) returns uuid language plpgsql stable security definer set search_path=public as $$
+declare target uuid; begin select id into target from rooms where code=upper(trim(p_ref)) or id::text=p_ref; if target is null then raise exception 'Sala no encontrada'; end if; return target; end $$;
+
+create or replace function public.notify_room(p_room uuid) returns void language plpgsql security definer set search_path=public as $$
+declare r rooms; begin update rooms set version=version+1 where id=p_room returning * into r; perform realtime.send(jsonb_build_object('version',r.version),'room_changed','room:'||r.code,true); end $$;
+
+create or replace function public.get_room_snapshot(p_code text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_code); r rooms; latest rounds; viewer uuid; phase_value text;
+begin
+  select * into r from public.assert_live_room(rid); select public.viewer_player(rid) into viewer;
+  select * into latest from rounds where room_id=rid order by number desc limit 1;
+  phase_value:=case when r.phase='playing' and latest.id is not null then latest.phase when r.phase='finished' then 'finished' else 'lobby' end;
+  return jsonb_build_object(
+    'code',r.code,'hostId',r.host_player_id,'intensity',r.intensity,'phase',phase_value,
+    'players',coalesce((select jsonb_agg(jsonb_build_object('id',p.id,'nickname',p.nickname,'isHost',p.is_host,'score',p.score,'activeFromRound',p.active_from_round,'juryRounds',p.jury_rounds) order by p.joined_at) from players p where p.room_id=rid),'[]'::jsonb),
+    'rounds',coalesce((select jsonb_agg(jsonb_build_object('number',q.number,'promptId',q.prompt_id,'prompt',jsonb_build_object('id',pr.id,'category',pr.category,'intensity',pr.intensity,'status',pr.status,'text',pr.text,'sideA',pr.side_a,'sideB',pr.side_b),'jurorIds',coalesce((select jsonb_agg(rp.player_id) from round_players rp where rp.round_id=q.id and rp.role='juror'),'[]'::jsonb),'assignments',coalesce((select jsonb_object_agg(rp.player_id,rp.side) from round_players rp where rp.round_id=q.id and rp.role='debater'),'{}'::jsonb),'debateEndsAt',q.ends_at,'voteEndsAt',q.vote_ends_at,'votes',case when q.phase='results' then coalesce((select jsonb_agg(jsonb_build_object('playerId',v.player_id,'side',v.side)) from votes v where v.round_id=q.id),'[]'::jsonb) else coalesce((select jsonb_agg(jsonb_build_object('playerId',v.player_id,'side',v.side)) from votes v where v.round_id=q.id and v.player_id=viewer),'[]'::jsonb) end,'changeRequests',coalesce((select jsonb_agg(c.player_id) from prompt_change_requests c where c.round_id=q.id),'[]'::jsonb),'result',q.result,'wasRandomTiebreak',q.was_random_tiebreak) order by q.number) from rounds q join prompts pr on pr.id=q.prompt_id where q.room_id=rid),'[]'::jsonb),
+    'decks',jsonb_build_object('tranqui',jsonb_build_object('order','[]'::jsonb,'cursor',0,'history','[]'::jsonb,'cycle',1),'bardo',jsonb_build_object('order','[]'::jsonb,'cursor',0,'history','[]'::jsonb,'cycle',1)),
+    'lastOddExtraSide',r.last_odd_extra_side,'createdAt',r.created_at,'expiresAt',r.expires_at,'serverNow',now(),'viewerPlayerId',viewer
+  );
+end $$;
+
+create or replace function public.create_room(p_nickname text,p_intensity text default 'tranqui') returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid; pid uuid; generated text; attempts integer:=0;
+begin
+  if auth.uid() is null then raise exception 'Iniciá una sesión anónima antes de crear una sala'; end if;
+  if char_length(trim(p_nickname)) not between 2 and 16 then raise exception 'El apodo debe tener entre 2 y 16 caracteres'; end if;
+  loop
+    generated:=array_to_string(array(select substr('ABCDEFGHJKLMNPQRSTUVWXYZ23456789',floor(random()*32)::integer+1,1) from generate_series(1,8)),'');
+    begin
+      insert into rooms(code,intensity) values(generated,p_intensity) returning id into rid; exit;
+    exception when unique_violation then attempts:=attempts+1; if attempts>=5 then raise exception 'No se pudo generar un código único'; end if;
+    end;
+  end loop;
+  insert into players(room_id,auth_user_id,nickname,is_host) values(rid,auth.uid(),trim(p_nickname),true) returning id into pid;
+  update rooms set host_player_id=pid where id=rid;
+  insert into prompt_decks(room_id,intensity,deck) select rid,x,array(select id from prompts where intensity=x and status='active' order by random()) from unnest(array['tranqui','bardo']) x;
+  insert into events(room_id,player_id,name) values(rid,pid,'room_created');
+  return public.get_room_snapshot(generated);
+end $$;
+
+create or replace function public.join_room(p_code text,p_nickname text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_code); r rooms; pid uuid;
+begin
+  if auth.uid() is null then raise exception 'Iniciá una sesión anónima antes de entrar'; end if;
+  select * into r from rooms where id=rid for update; if r.expires_at<=now() then raise exception 'Sala vencida'; end if;
+  select id into pid from players where room_id=rid and auth_user_id=auth.uid();
+  if pid is null then
+    if r.phase not in ('lobby','playing','paused') then raise exception 'La partida terminó'; end if;
+    if (select count(*) from players where room_id=rid)>=8 then raise exception 'La sala está completa'; end if;
+    if char_length(trim(p_nickname)) not between 2 and 16 then raise exception 'El apodo debe tener entre 2 y 16 caracteres'; end if;
+    insert into players(room_id,auth_user_id,nickname,active_from_round) values(rid,auth.uid(),trim(p_nickname),case when r.phase='lobby' then 1 else r.round_count+1 end) returning id into pid;
+    insert into events(room_id,player_id,name) values(rid,pid,'player_joined'); perform public.notify_room(rid);
+  end if;
+  return public.get_room_snapshot(p_code);
+end $$;
+
+create or replace function public.start_new_round(p_room uuid) returns void language plpgsql security definer set search_path=public as $$
+declare r rooms; n integer; prompt text; previous_round uuid; new_round uuid; jurors uuid[]; extra text; target_a integer; candidate record; pos integer:=0;
+begin
+  select * into r from rooms where id=p_room for update;
+  n:=r.round_count+1; if n>5 then update rooms set phase='finished' where id=p_room; return; end if;
+  select id into previous_round from rounds where room_id=p_room order by number desc limit 1;
+  select array_agg(id) into jurors from (
+    select p.id from players p where p.room_id=p_room and p.active_from_round<=n
+    order by p.jury_rounds,case when exists(select 1 from round_players rp where rp.round_id=previous_round and rp.player_id=p.id and rp.role='juror') then 1 else 0 end,random()
+    limit case when (select count(*) from players where room_id=p_room and active_from_round<=n)>=6 then 2 else 1 end
+  ) jury;
+  update players set jury_rounds=jury_rounds+1 where id=any(jurors);
+  if ((select count(*) from players where room_id=p_room and active_from_round<=n and not(id=any(jurors)))%2)=1 then extra:=case when r.last_odd_extra_side is null then case when random()<.5 then 'A' else 'B' end when r.last_odd_extra_side='A' then 'B' else 'A' end; else extra:=null; end if;
+  target_a:=floor((select count(*) from players where room_id=p_room and active_from_round<=n and not(id=any(jurors)))/2.0)::int+case when extra='A' then 1 else 0 end;
+  prompt:=public.deal_prompt(p_room,r.intensity);
+  insert into rounds(room_id,number,prompt_id,phase,ends_at) values(p_room,n,prompt,'debating',now()+interval '60 seconds') returning id into new_round;
+  for candidate in
+    select p.id,coalesce(old.side,'') as previous_side from players p left join lateral (select side from round_players where round_id=previous_round and player_id=p.id) old on true
+    where p.room_id=p_room and p.active_from_round<=n and not(p.id=any(jurors))
+    order by case when old.side='B' then 0 when old.side='A' then 1 else 2 end,random()
+  loop
+    pos:=pos+1; insert into round_players(round_id,player_id,role,side) values(new_round,candidate.id,'debater',case when pos<=target_a then 'A' else 'B' end);
+  end loop;
+  insert into round_players(round_id,player_id,role) select new_round,unnest(jurors);
+  update rooms set round_count=n,phase='playing',last_odd_extra_side=coalesce(extra,last_odd_extra_side) where id=p_room;
+  insert into events(room_id,name,metadata) values(p_room,'round_started',jsonb_build_object('round',n));
+end $$;
+
+create or replace function public.start_game(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede empezar'; end if; if r.phase<>'lobby' then raise exception 'La partida ya empezó'; end if; if (select count(*) from players where room_id=rid) not between 3 and 8 then raise exception 'Se necesitan entre tres y ocho jugadores'; end if; perform public.start_new_round(rid); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.advance_to_voting(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; current rounds;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host abre la votación'; end if; select * into current from rounds where room_id=rid order by number desc limit 1 for update; if current.phase in ('voting','results') then return public.get_room_snapshot(p_room_id); end if; if current.phase<>'debating' then raise exception 'La ronda no está debatiendo'; end if; if now()<current.ends_at then raise exception 'Todavía queda tiempo de debate'; end if; update rounds set phase='voting',vote_ends_at=now()+interval '30 seconds' where id=current.id; insert into events(room_id,name) values(rid,'voting_opened'); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.finalize_round(p_round uuid) returns void language plpgsql security definer set search_path=public as $$
+declare a integer; b integer; winner text; random_tie boolean; room_ref uuid;
+begin
+  select room_id into room_ref from rounds where id=p_round for update;
+  if (select phase from rounds where id=p_round)='results' then return; end if;
+  select count(*) filter(where side='A'),count(*) filter(where side='B') into a,b from votes where round_id=p_round;
+  random_tie:=a=b; winner:=case when a>b then 'A' when b>a then 'B' when random()<.5 then 'A' else 'B' end;
+  update rounds set phase='results',result=winner,was_random_tiebreak=random_tie where id=p_round;
+  update players p set score=score+1 from round_players rp where rp.round_id=p_round and rp.player_id=p.id and rp.role='debater' and rp.side=winner;
+  insert into events(room_id,name,metadata) values(room_ref,'round_finished',jsonb_build_object('winner',winner,'random_tiebreak',random_tie));
+end $$;
+
+create or replace function public.cast_vote(p_room_id text,p_side text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); current rounds; pid uuid;
+begin
+  perform public.assert_live_room(rid); if p_side not in ('A','B') then raise exception 'Postura inválida'; end if; pid:=public.viewer_player(rid); select * into current from rounds where room_id=rid order by number desc limit 1 for update; if current.phase<>'voting' then raise exception 'La votación no está abierta'; end if; if now()>=current.vote_ends_at then raise exception 'La votación venció'; end if; if not exists(select 1 from round_players where round_id=current.id and player_id=pid and role='juror') then raise exception 'Sólo el jurado puede votar'; end if;
+  insert into votes(round_id,player_id,side) values(current.id,pid,p_side);
+  if (select count(*) from votes where round_id=current.id)=(select count(*) from round_players where round_id=current.id and role='juror') then perform public.finalize_round(current.id); end if;
+  perform public.notify_room(rid); return public.get_room_snapshot(p_room_id);
+exception when unique_violation then raise exception 'Ya emitiste tu voto'; end $$;
+
+create or replace function public.close_voting(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; current rounds;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede cerrar'; end if; select * into current from rounds where room_id=rid order by number desc limit 1 for update; if current.phase='results' then return public.get_room_snapshot(p_room_id); end if; if current.phase<>'voting' then raise exception 'La votación no está abierta'; end if; if now()<current.vote_ends_at then raise exception 'Todavía queda tiempo de votación'; end if; perform public.finalize_round(current.id); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.request_prompt_change(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); current rounds; pid uuid;
+begin perform public.assert_live_room(rid); pid:=public.viewer_player(rid); select * into current from rounds where room_id=rid order by number desc limit 1 for update; if current.phase<>'debating' then raise exception 'Sólo se puede pedir durante el debate'; end if; if not exists(select 1 from round_players where round_id=current.id and player_id=pid) then raise exception 'No participás de esta ronda'; end if; insert into prompt_change_requests(round_id,player_id) values(current.id,pid) on conflict do nothing; insert into events(room_id,player_id,name) values(rid,pid,'prompt_change_requested'); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.confirm_prompt_change(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; current rounds; prompt text;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host confirma el cambio'; end if; select * into current from rounds where room_id=rid order by number desc limit 1 for update; if current.phase<>'debating' then raise exception 'No hay un debate activo'; end if; if not exists(select 1 from prompt_change_requests where round_id=current.id) then raise exception 'No hay solicitud pendiente'; end if; prompt:=public.deal_prompt(rid,r.intensity); update rounds set prompt_id=prompt,ends_at=now()+interval '60 seconds' where id=current.id; delete from prompt_change_requests where round_id=current.id; insert into events(room_id,name) values(rid,'prompt_skipped'); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.start_round(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; current_phase text;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede continuar'; end if; if r.phase<>'playing' then raise exception 'La partida no está activa'; end if; select phase into current_phase from rounds where room_id=rid order by number desc limit 1; if current_phase is distinct from 'results' then raise exception 'Primero terminá la ronda actual'; end if; perform public.start_new_round(rid); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.set_intensity(p_room_id text,p_intensity text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; current_phase text;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede cambiar el modo'; end if; if p_intensity not in ('tranqui','bardo') then raise exception 'Modo inválido'; end if; select phase into current_phase from rounds where room_id=rid order by number desc limit 1; if r.phase<>'lobby' and current_phase is distinct from 'results' then raise exception 'Cambiá el modo entre rondas'; end if; update rooms set intensity=p_intensity where id=rid; perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.rematch(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms;
+begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede pedir revancha'; end if; if r.phase<>'finished' then raise exception 'La revancha se habilita al terminar'; end if; delete from rounds where room_id=rid; update players set score=0,jury_rounds=0,active_from_round=1 where room_id=rid; update rooms set phase='lobby',round_count=0,last_odd_extra_side=null where id=rid; insert into events(room_id,name) values(rid,'rematch_started'); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+create or replace function public.pause_game(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede pausar'; end if; if r.phase<>'playing' then raise exception 'La partida no está activa'; end if; update rooms set phase='paused' where id=rid; perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+create or replace function public.resume_game(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede reanudar'; end if; if r.phase<>'paused' then raise exception 'La partida no está pausada'; end if; update rooms set phase='playing' where id=rid; perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+create or replace function public.cancel_game(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
+declare rid uuid:=public.resolve_room(p_room_id); r rooms; begin select * into r from public.assert_live_room(rid); if r.host_player_id<>public.viewer_player(rid) then raise exception 'Sólo el host puede cancelar'; end if; update rooms set phase='cancelled' where id=rid; insert into events(room_id,name) values(rid,'game_cancelled'); perform public.notify_room(rid); return public.get_room_snapshot(p_room_id); end $$;
+
+-- Private Realtime: members can receive Broadcast and Presence only for their own room topic.
+create policy "room members receive realtime" on realtime.messages for select to authenticated using (realtime.topic() like 'room:%' and exists(select 1 from public.rooms r where r.code=split_part(realtime.topic(),':',2) and public.is_room_member(r.id)));
+create policy "room members send presence" on realtime.messages for insert to authenticated with check (realtime.topic() like 'room:%' and exists(select 1 from public.rooms r where r.code=split_part(realtime.topic(),':',2) and public.is_room_member(r.id)));
+
+grant execute on function public.create_room(text,text),public.join_room(text,text),public.get_room_snapshot(text),public.start_game(text),public.start_round(text),public.advance_to_voting(text),public.cast_vote(text,text),public.close_voting(text),public.request_prompt_change(text),public.confirm_prompt_change(text),public.set_intensity(text,text),public.rematch(text),public.pause_game(text),public.resume_game(text),public.cancel_game(text) to authenticated;
