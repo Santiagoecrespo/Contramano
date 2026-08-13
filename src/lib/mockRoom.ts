@@ -1,4 +1,4 @@
-import { activePrompts, promptPreviews } from '../data/prompts'
+import { activePrompts, findPrompt } from '../data/prompts'
 import type { Intensity, MockDeck, MockPlayer, MockRoom, MockRound, PromptPreview, Side } from '../types/game'
 import { generateRoomCode } from './roomCode'
 
@@ -44,15 +44,15 @@ function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.
     room.decks[intensity] = deck
   }
   const recentIds = new Set(deck.history.slice(-10))
-  const lastCategory = deck.history.at(-1) ? promptPreviews.find((prompt) => prompt.id === deck.history.at(-1))?.category : undefined
+  const lastCategory = deck.history.at(-1) ? findPrompt(deck.history.at(-1)!)?.category : undefined
   let selectedIndex = deck.cursor
   for (let index = deck.cursor; index < deck.order.length; index += 1) {
-    const candidate = promptPreviews.find((prompt) => prompt.id === deck.order[index])!
+    const candidate = findPrompt(deck.order[index])!
     if (!recentIds.has(candidate.id) && candidate.category !== lastCategory) { selectedIndex = index; break }
   }
   if (selectedIndex === deck.cursor && lastCategory) {
     for (let index = deck.cursor; index < deck.order.length; index += 1) {
-      const candidate = promptPreviews.find((prompt) => prompt.id === deck.order[index])!
+      const candidate = findPrompt(deck.order[index])!
       if (!recentIds.has(candidate.id)) { selectedIndex = index; break }
     }
   }
@@ -60,7 +60,7 @@ function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.
   const promptId = deck.order[deck.cursor]
   deck.cursor += 1
   deck.history.push(promptId)
-  return promptPreviews.find((prompt) => prompt.id === promptId)!
+  return findPrompt(promptId)!
 }
 
 function normalizeRoom(room: MockRoom): MockRoom {

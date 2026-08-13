@@ -41,8 +41,8 @@ Sin variables de Supabase, el adaptador local de Hito 2 sigue siendo el respaldo
 ### Configuración manual
 
 1. Creá un proyecto en Supabase y activá **Anonymous sign-ins** en Authentication > Providers.
-2. Para un proyecto nuevo, ejecutá una única vez en SQL Editor el contenido completo de [`supabase/migrations/202608120001_realtime_multiplayer.sql`](supabase/migrations/202608120001_realtime_multiplayer.sql), que ya incluye el arreglo de creación de jurados.
-   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá en orden [`202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql) y [`202608130001_allow_host_early_voting.sql`](supabase/migrations/202608130001_allow_host_early_voting.sql). Ambas reemplazan funciones de forma segura y no borran datos ni tablas.
+2. Para un proyecto nuevo, ejecutá una única vez en SQL Editor el contenido completo de [`supabase/migrations/202608120001_realtime_multiplayer.sql`](supabase/migrations/202608120001_realtime_multiplayer.sql), que ya incluye jurados, votación anticipada y el catálogo editorial completo.
+   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá en orden [`202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql), [`202608130001_allow_host_early_voting.sql`](supabase/migrations/202608130001_allow_host_early_voting.sql) y [`202608130002_expand_editorial_prompt_catalog.sql`](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql). Todas reemplazan o actualizan datos de forma segura y no borran salas, partidas ni tablas.
 3. Copiá `.env.example` como `.env.local` y completá los valores públicos del proyecto:
 
 ```dotenv
@@ -53,6 +53,10 @@ VITE_SUPABASE_PUBLISHABLE_KEY=tu_publishable_key
 4. Reiniciá `npm run dev`. Dentro de una sala aparecerá `EN VIVO` cuando esté usando Supabase.
 
 La migración crea tablas, índices, políticas RLS, mazos persistentes, 60 consignas activas, eventos, RPCs autoritativas y las políticas de Realtime privado. No contiene credenciales ni tareas de expiración: cada RPC valida `expires_at` al ejecutarse.
+
+### Catálogo editorial
+
+Cada modo incluye **60 cartas activas y 20 de reserva**: cuatro activas para cada una de estas 15 situaciones: Asado, Mate, Salidas, Música, Amistades, Redes, Facultad, Laburo, Viajes, Convivencia, Plata, Juegos, Fútbol, Planes y Hábitos. El mazo mantiene sus reglas actuales de no repetición, categorías consecutivas y revancha. La migración editorial marca cartas previas fuera de la selección como `reserve`; no elimina consignas que puedan estar en una ronda histórica ni modifica mazos ya persistidos.
 
 Para probarlo, abrí la sala en perfiles o navegadores separados. El host inicia con tres personas; al terminar el debate su cliente intenta abrir la votación y la RPC comprueba el reloj del servidor. Los botones del host quedan como respaldo, sin permitir adelantar esos tiempos. Sólo votan jurados; se cierra automáticamente si votan todos o el host puede cerrarla al vencer los 30 segundos. Si el host se desconecta, la sala queda esperando su regreso, sin transferencia automática.
 
