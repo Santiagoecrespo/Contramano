@@ -42,7 +42,7 @@ Sin variables de Supabase, el adaptador local de Hito 2 sigue siendo el respaldo
 
 1. Creá un proyecto en Supabase y activá **Anonymous sign-ins** en Authentication > Providers.
 2. Para un proyecto nuevo, ejecutá una única vez en SQL Editor el contenido completo de [`supabase/migrations/202608120001_realtime_multiplayer.sql`](supabase/migrations/202608120001_realtime_multiplayer.sql), que ya incluye jurados, votación anticipada y el catálogo editorial completo.
-   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá en orden [`202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql), [`202608130001_allow_host_early_voting.sql`](supabase/migrations/202608130001_allow_host_early_voting.sql), [`202608130002_expand_editorial_prompt_catalog.sql`](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql) y [`202608130003_tighten_prompt_conflicts.sql`](supabase/migrations/202608130003_tighten_prompt_conflicts.sql). Todas reemplazan o actualizan datos de forma segura y no borran salas, partidas ni tablas.
+   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá en orden [`202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql), [`202608130001_allow_host_early_voting.sql`](supabase/migrations/202608130001_allow_host_early_voting.sql), [`202608130002_expand_editorial_prompt_catalog.sql`](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql), [`202608130003_tighten_prompt_conflicts.sql`](supabase/migrations/202608130003_tighten_prompt_conflicts.sql) y [`202608130004_add_resilience.sql`](supabase/migrations/202608130004_add_resilience.sql). Todas reemplazan o actualizan datos de forma segura y no borran salas, partidas ni tablas.
 3. Copiá `.env.example` como `.env.local` y completá los valores públicos del proyecto:
 
 ```dotenv
@@ -54,6 +54,14 @@ VITE_SUPABASE_PUBLISHABLE_KEY=tu_publishable_key
 
 La migración crea tablas, índices, políticas RLS, mazos persistentes, 60 consignas activas, eventos, RPCs autoritativas y las políticas de Realtime privado. No contiene credenciales ni tareas de expiración: cada RPC valida `expires_at` al ejecutarse.
 
+### Hito 4 — Resiliencia
+
+La migración `202608130004_add_resilience.sql` añade un heartbeat persistido por jugador, reconciliación idempotente y metadatos de pausa. Presence sigue siendo visual: las decisiones de pausa, reanudación y transferencia se hacen con `last_seen_at` en servidor. Con menos de tres personas conectadas la ronda se pausa y congela el tiempo; al volver a tres, sólo el host puede reanudar. Si el host no aparece durante 45 segundos y hay tres personas conectadas, se asigna el host al jugador conectado más antiguo y se registra `host_transferred`.
+
+El debate y la votación se concilian desde cualquier miembro al vencer sus timestamps del servidor. El host conserva el único permiso para adelantar la apertura de votación. Los votos usan una restricción única y una inserción idempotente, por lo que un doble clic o dos pestañas no otorgan puntos dos veces.
+
+La revancha ahora genera una sala nueva con código y link nuevos, puntajes en cero y sólo quienes sigan conectados. La sala anterior conserva sus rondas como historial y muestra el acceso a la nueva mesa.
+
 ### Catálogo editorial
 
 Cada modo incluye **60 cartas activas y 20 de reserva**: cuatro activas para cada una de estas 15 situaciones: Asado, Mate, Salidas, Música, Amistades, Redes, Facultad, Laburo, Viajes, Convivencia, Plata, Juegos, Fútbol, Planes y Hábitos. Cada consigna propone una decisión, un límite o una responsabilidad concreta con dos posturas defendibles; no se usan observaciones vagas, conclusiones cerradas ni frases incompletas. El mazo mantiene sus reglas actuales de no repetición, categorías consecutivas y revancha. Las migraciones editoriales sólo actualizan textos y marcan cartas previas fuera de la selección como `reserve`; no eliminan consignas que puedan estar en una ronda histórica ni modifican mazos ya persistidos.
@@ -63,6 +71,14 @@ Para probarlo, abrí la sala en perfiles o navegadores separados. El host inicia
 ### Prueba manual recomendada
 
 Después de ejecutar las migraciones correctivas, abrí una ventana normal y dos incógnitas (o tres navegadores): creá una sala con el host y abrí el link desde las otras dos sesiones. Cada invitado debe ver primero el formulario **Unirme a la mesa**, sin errores de snapshot; ingresá apodos distintos y verificá que el lobby pase a tres personas. Iniciá la partida, comprobá que hay un jurado y usá **Abrir votación ahora** antes de que llegue a cero: sólo el host debe verlo y todos deben pasar a votar. También esperá el fin natural del contador en otra ronda. Si algo falla, revisá la consola: en desarrollo cada RPC registra su nombre y el error de Supabase una sola vez, mientras la interfaz muestra un mensaje entendible.
+
+Para validar Hito 4 con esas mismas tres sesiones:
+
+1. Recargá cada sesión durante lobby, debate, voto, resultado y final: el apodo, rol, puntaje y ronda deben volver desde el snapshot.
+2. Durante el debate, cerrá dos sesiones. En menos de 20 segundos la tercera debe ver **“La partida está en pausa: faltan jugadores.”** y el contador debe congelarse. Reabrí una sesión: sólo el host puede pulsar **Reanudar partida**.
+3. Cerrá la sesión del host y mantené tres personas conectadas. Después de 45 segundos, un jugador conectado pasa a ser anfitrión y puede reanudar o continuar.
+4. Dejá vencer un debate y una votación sin tocar los controles: cualquier sesión abierta reconcilia cada transición una sola vez. Hacé doble clic en el voto del jurado: debe quedar un solo voto.
+5. Terminá las cinco rondas y pedí revancha: se abre una URL con otro código, puntajes en cero y la mesa original mantiene el ranking anterior.
 
 ## Decisión acordada para `start_round()`
 

@@ -8,6 +8,7 @@ const correctiveMigration = readFileSync(resolve(process.cwd(), 'supabase/migrat
 const earlyVotingMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130001_allow_host_early_voting.sql'), 'utf8')
 const editorialCatalogMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql'), 'utf8')
 const editorialTighteningMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130003_tighten_prompt_conflicts.sql'), 'utf8')
+const resilienceMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130004_add_resilience.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -56,5 +57,31 @@ describe('migraciones Supabase de rondas', () => {
     expect(rootMigration).toContain('Editorial tightening v2')
     expect(rootMigration).toContain('El que compra para todos no tiene por qué perseguir transferencias.')
     expect(editorialTighteningMigration).not.toMatch(/\bdelete\s+from\b/i)
+  })
+
+  it('define reconciliación idempotente, heartbeat y pausa en servidor sin debilitar RLS', () => {
+    expect(resilienceMigration).toContain("add column if not exists last_seen_at")
+    expect(resilienceMigration).toContain("add column if not exists paused_at")
+    expect(resilienceMigration).toContain("last_seen_at>=now()-interval '20 seconds'")
+    expect(resilienceMigration).toContain("host_seen>=now()-interval '45 seconds'")
+    expect(resilienceMigration).toContain("'host_transferred'")
+    expect(resilienceMigration).toContain('create or replace function public.heartbeat')
+    expect(resilienceMigration).toContain('create or replace function public.reconcile_room')
+    expect(resilienceMigration).toContain("current.phase='debating' and now()>=current.ends_at")
+    expect(resilienceMigration).toContain("current.phase='voting' and now()>=current.vote_ends_at")
+    expect(resilienceMigration).toContain("on conflict(round_id,player_id) do nothing")
+    expect(resilienceMigration).toContain("if current.phase='results' then return public.get_room_snapshot")
+    expect(resilienceMigration).toContain("if now()<current.ends_at and r.host_player_id<>pid then raise exception 'Sólo el host abre la votación antes de tiempo'")
+    expect(resilienceMigration).toContain("if public.connected_player_count(rid)<3 then raise exception 'Todavía faltan jugadores para reanudar'")
+    expect(resilienceMigration).not.toMatch(/disable row level security|drop policy|service_role/i)
+  })
+
+  it('crea revancha limpia en una sala nueva y conserva el historial anterior', () => {
+    expect(resilienceMigration).toContain("insert into public.rooms(code,intensity)")
+    expect(resilienceMigration).toContain("where p.room_id=rid and p.last_seen_at>=now()-interval '20 seconds'")
+    expect(resilienceMigration).toContain('successor_room_id=new_room')
+    expect(resilienceMigration).toContain("'rematch_started'")
+    expect(resilienceMigration).not.toMatch(/delete\s+from\s+public\.(rounds|votes|players)/i)
+    expect(rootMigration).toContain('Hito 4 base installation')
   })
 })

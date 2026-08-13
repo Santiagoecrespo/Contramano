@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { advanceToVoting, assignPostures, castMockVote, closeMockVoting, confirmPromptChange, continueMockGame, createMockRoom, getMockRoom, joinMockRoom, jurorCountFor, rematchMockGame, requestPromptChange, saveMockRoom, selectJurors, setMockIntensity, startMockGame } from './mockRoom'
+import { advanceToVoting, assignPostures, castMockVote, closeMockVoting, confirmPromptChange, continueMockGame, createMockRoom, getMockRoom, heartbeatMockRoom, joinMockRoom, jurorCountFor, reconcileMockRoom, rematchMockGame, requestPromptChange, resumeMockGame, saveMockRoom, selectJurors, setMockIntensity, startMockGame } from './mockRoom'
 import type { MockPlayer } from '../types/game'
 
 const lowRandom = () => 0
@@ -182,13 +182,62 @@ describe('flujo local con jurado', () => {
     expect(next.rounds[1].jurorIds.includes(latePlayer.id) || next.rounds[1].assignments[latePlayer.id]).toBeTruthy()
   })
 
-  it('permite al host cerrar votación incompleta y reinicia jurados y puntajes en revancha', () => {
+  it('cierra una votación vencida sin votos y reinicia jurados y puntajes en revancha', () => {
     const room = roomWith(6)
     advanceToVoting(room.code, room.hostId)
+    const voting = getMockRoom(room.code)!; voting.rounds[0].voteEndsAt = new Date(Date.now() - 1).toISOString(); saveMockRoom(voting)
     const closed = closeMockVoting(room.code, room.hostId, lowRandom)!
     closed.phase = 'finished'; closed.players[0].score = 3; saveMockRoom(closed)
     const rematch = rematchMockGame(room.code, room.hostId)!
     expect(rematch.phase).toBe('lobby'); expect(rematch.rounds).toHaveLength(0)
     expect(rematch.players.every((player) => player.score === 0 && player.juryRounds === 0)).toBe(true)
+  })
+
+  it('reconcilia el debate y la votación vencidos una sola vez aunque lo pidan varias personas', () => {
+    const room = roomWith(3); const debateEnd = new Date(room.rounds[0].debateEndsAt).getTime() + 1
+    room.players.forEach((player) => heartbeatMockRoom(room.code, player.id, debateEnd))
+    const voting = reconcileMockRoom(room.code, debateEnd, lowRandom)!
+    expect(voting.phase).toBe('voting')
+    expect(reconcileMockRoom(room.code, debateEnd, lowRandom)!.rounds).toHaveLength(1)
+    const voteEnd = new Date(voting.rounds[0].voteEndsAt!).getTime() + 1
+    voting.players.forEach((player) => heartbeatMockRoom(voting.code, player.id, voteEnd))
+    expect(reconcileMockRoom(room.code, voteEnd, lowRandom)!.phase).toBe('results')
+    expect(reconcileMockRoom(room.code, voteEnd, lowRandom)!.players.map((player) => player.score)).toEqual(getMockRoom(room.code)!.players.map((player) => player.score))
+  })
+
+  it('pausa con menos de tres conexiones, congela tiempo y sólo el host puede reanudar', () => {
+    const room = roomWith(4); const future = Date.now() + 30_000
+    heartbeatMockRoom(room.code, room.hostId, future); heartbeatMockRoom(room.code, room.players[1].id, future)
+    const paused = reconcileMockRoom(room.code, future)!
+    expect(paused.phase).toBe('paused'); expect(paused.pausedPhase).toBe('debating'); expect(paused.pausedRemainingSeconds).toBeGreaterThan(0)
+    const guest = room.players[1].id; heartbeatMockRoom(room.code, room.players[2].id, future)
+    expect(resumeMockGame(room.code, guest, future)!.phase).toBe('paused')
+    expect(resumeMockGame(room.code, room.hostId, future)!.phase).toBe('debating')
+  })
+
+  it('transfiere el host ausente después de 45 segundos al conectado más antiguo disponible', () => {
+    const room = roomWith(4); const future = Date.now() + 60_000
+    room.players.filter((player) => player.id !== room.hostId).forEach((player) => heartbeatMockRoom(room.code, player.id, future))
+    const reconciled = reconcileMockRoom(room.code, future)!
+    expect(reconciled.hostId).not.toBe(room.hostId)
+    expect(reconciled.players.filter((player) => player.isHost)).toHaveLength(1)
+  })
+
+  it('conserva el mismo jugador en dos pestañas y rechaza la sala vencida sin mutarla', () => {
+    const room = createMockRoom('Host', 'tranqui')
+    joinMockRoom(room.code, 'Mili'); joinMockRoom(room.code, 'Mili')
+    expect(getMockRoom(room.code)!.players.filter((player) => player.nickname === 'Mili')).toHaveLength(1)
+    const expired = getMockRoom(room.code)!; expired.expiresAt = new Date(Date.now() - 1).toISOString(); saveMockRoom(expired)
+    expect(reconcileMockRoom(room.code, Date.now())).toMatchObject({ phase: 'lobby' })
+    expect(getMockRoom(room.code)?.rounds).toHaveLength(0)
+  })
+
+  it('crea una revancha limpia sólo con jugadores conectados y conserva la sala anterior', () => {
+    const room = roomWith(4); room.phase = 'finished'; room.players[0].score = 3; saveMockRoom(room)
+    const stored = getMockRoom(room.code)!; stored.players[3].lastSeenAt = new Date(Date.now() - 30_000).toISOString(); saveMockRoom(stored)
+    const next = rematchMockGame(room.code, room.hostId)!
+    expect(next.code).not.toBe(room.code); expect(next.phase).toBe('lobby'); expect(next.rounds).toHaveLength(0)
+    expect(next.players).toHaveLength(3); expect(next.players.every((player) => player.score === 0)).toBe(true)
+    expect(getMockRoom(room.code)?.successorCode).toBe(next.code)
   })
 })

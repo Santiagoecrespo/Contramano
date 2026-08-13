@@ -6,6 +6,8 @@ const STORAGE_PREFIX = 'contramano:room:'
 const SESSION_PREFIX = 'contramano:player:'
 const DEBATE_SECONDS = 60
 const VOTE_SECONDS = 30
+const CONNECTED_WINDOW_MS = 20_000
+const HOST_GRACE_MS = 45_000
 export const MAX_PLAYERS = 8
 export const MIN_PLAYERS = 3
 
@@ -67,7 +69,7 @@ function normalizeRoom(room: MockRoom): MockRoom {
   return {
     ...room,
     phase: room.phase ?? 'lobby', lastOddExtraSide: room.lastOddExtraSide ?? null, decks: room.decks ?? createDecks(),
-    players: room.players.map((player) => ({ ...player, score: player.score ?? 0, activeFromRound: player.activeFromRound ?? 1, juryRounds: player.juryRounds ?? 0 })),
+    players: room.players.map((player) => ({ ...player, score: player.score ?? 0, activeFromRound: player.activeFromRound ?? 1, juryRounds: player.juryRounds ?? 0, lastSeenAt: player.lastSeenAt ?? room.createdAt })),
     rounds: (room.rounds ?? []).map((round) => ({ ...round, jurorIds: round.jurorIds ?? [], wasRandomTiebreak: round.wasRandomTiebreak ?? false })),
   }
 }
@@ -94,8 +96,8 @@ function mutateRoom(code: string, mutation: (room: MockRoom) => void): MockRoom 
 export function createMockRoom(nickname: string, intensity: Intensity): MockRoom {
   let code = generateRoomCode()
   while (getMockRoom(code)) code = generateRoomCode()
-  const host: MockPlayer = { id: id(), nickname, isHost: true, score: 0, activeFromRound: 1, juryRounds: 0 }
   const now = new Date()
+  const host: MockPlayer = { id: id(), nickname, isHost: true, score: 0, activeFromRound: 1, juryRounds: 0, lastSeenAt: now.toISOString() }
   const room: MockRoom = { code, hostId: host.id, intensity, phase: 'lobby', players: [host], rounds: [], decks: createDecks(), lastOddExtraSide: null, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + 86400000).toISOString() }
   saveMockRoom(room); savePlayerSession(code, host.id); return room
 }
@@ -103,9 +105,9 @@ export function createMockRoom(nickname: string, intensity: Intensity): MockRoom
 export function joinMockRoom(code: string, nickname: string): MockRoom | null {
   const room = mutateRoom(code, (storedRoom) => {
     const existing = storedRoom.players.find((player) => player.nickname.toLowerCase() === nickname.toLowerCase())
-    if (existing) { savePlayerSession(storedRoom.code, existing.id); return }
+    if (existing) { existing.lastSeenAt = new Date().toISOString(); savePlayerSession(storedRoom.code, existing.id); return }
     if (storedRoom.players.length >= MAX_PLAYERS) return
-    storedRoom.players.push({ id: id(), nickname, isHost: false, score: 0, juryRounds: 0, activeFromRound: storedRoom.phase === 'lobby' ? 1 : storedRoom.rounds.length + 1 })
+    storedRoom.players.push({ id: id(), nickname, isHost: false, score: 0, juryRounds: 0, activeFromRound: storedRoom.phase === 'lobby' ? 1 : storedRoom.rounds.length + 1, lastSeenAt: new Date().toISOString() })
   })
   const player = room?.players.find((candidate) => candidate.nickname.toLowerCase() === nickname.toLowerCase())
   if (player) savePlayerSession(room!.code, player.id)
@@ -116,7 +118,7 @@ export function addDemoPlayers(code: string): MockRoom | null {
   return mutateRoom(code, (room) => {
     ;['Mili', 'Tomi', 'Sofi', 'Lolo', 'Nati', 'Pau', 'Rama'].forEach((nickname) => {
       if (room.players.length >= MAX_PLAYERS || room.players.some((player) => player.nickname === nickname)) return
-      room.players.push({ id: id(), nickname, isHost: false, score: 0, juryRounds: 0, activeFromRound: room.phase === 'lobby' ? 1 : room.rounds.length + 1 })
+      room.players.push({ id: id(), nickname, isHost: false, score: 0, juryRounds: 0, activeFromRound: room.phase === 'lobby' ? 1 : room.rounds.length + 1, lastSeenAt: new Date().toISOString() })
     })
   })
 }
@@ -181,7 +183,7 @@ function beginRound(room: MockRoom, random: Random = Math.random): void {
 }
 
 export function startMockGame(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId === room.hostId && room.phase === 'lobby' && room.players.length >= MIN_PLAYERS) beginRound(room, random) }) }
-export function advanceToVoting(code: string, actorId: string): MockRoom | null { return mutateRoom(code, (room) => { if (actorId === room.hostId && room.phase === 'debating') { const round = currentRound(room); room.phase = 'voting'; round.voteEndsAt = new Date(Date.now() + VOTE_SECONDS * 1000).toISOString() } }) }
+export function advanceToVoting(code: string, actorId: string): MockRoom | null { return mutateRoom(code, (room) => { const round = currentRound(room); if (room.phase === 'debating' && (actorId === room.hostId || Date.now() >= new Date(round.debateEndsAt).getTime())) { room.phase = 'voting'; round.voteEndsAt = new Date(Date.now() + VOTE_SECONDS * 1000).toISOString() } }) }
 
 function finalizeRound(room: MockRoom, random: Random = Math.random): void {
   const round = currentRound(room)
@@ -203,10 +205,72 @@ export function castMockVote(code: string, playerId: string, side: Side, random:
   })
 }
 
-export function closeMockVoting(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId === room.hostId && room.phase === 'voting') finalizeRound(room, random) }) }
+export function closeMockVoting(code: string, _actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { const round = currentRound(room); if (room.phase === 'voting' && Boolean(round.voteEndsAt && Date.now() >= new Date(round.voteEndsAt).getTime())) finalizeRound(room, random) }) }
 export function requestPromptChange(code: string, playerId: string): MockRoom | null { return mutateRoom(code, (room) => { if (room.phase !== 'debating') return; const round = currentRound(room); if (!(round.assignments[playerId] || round.jurorIds.includes(playerId))) return; if (!round.changeRequests.includes(playerId)) round.changeRequests.push(playerId) }) }
 export function confirmPromptChange(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'debating') return; const round = currentRound(room); if (round.changeRequests.length === 0) return; const next = nextPrompt(room, room.intensity, random); round.prompt = next; round.promptId = next.id; round.changeRequests = []; round.debateEndsAt = new Date(Date.now() + DEBATE_SECONDS * 1000).toISOString() }) }
 export function setMockIntensity(code: string, actorId: string, intensity: Intensity): MockRoom | null { return mutateRoom(code, (room) => { if (actorId === room.hostId && (room.phase === 'lobby' || room.phase === 'results')) room.intensity = intensity }) }
 export function continueMockGame(code: string, actorId: string, random: Random = Math.random): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'results') return; if (room.rounds.length >= 5) { room.phase = 'finished'; return }; beginRound(room, random) }) }
-export function rematchMockGame(code: string, actorId: string): MockRoom | null { return mutateRoom(code, (room) => { if (actorId !== room.hostId || room.phase !== 'finished') return; room.players.forEach((player) => { player.score = 0; player.activeFromRound = 1; player.juryRounds = 0 }); room.rounds = []; room.lastOddExtraSide = null; room.phase = 'lobby' }) }
+function isConnected(player: MockPlayer, now: number): boolean { return new Date(player.lastSeenAt ?? 0).getTime() >= now - CONNECTED_WINDOW_MS }
+
+export function heartbeatMockRoom(code: string, playerId: string, now = Date.now()): MockRoom | null {
+  return mutateRoom(code, (room) => {
+    const player = room.players.find((candidate) => candidate.id === playerId)
+    if (player) player.lastSeenAt = new Date(now).toISOString()
+  })
+}
+
+export function reconcileMockRoom(code: string, now = Date.now(), random: Random = Math.random): MockRoom | null {
+  return mutateRoom(code, (room) => {
+    if (new Date(room.expiresAt).getTime() <= now) return
+    const connected = room.players.filter((player) => isConnected(player, now))
+    room.connectedPlayerIds = connected.map((player) => player.id)
+    const round = room.rounds.at(-1)
+    if (room.phase === 'debating' || room.phase === 'voting') {
+      if (connected.length < MIN_PLAYERS && round) {
+        room.pausedPhase = room.phase
+        room.pausedRemainingSeconds = Math.max(0, Math.ceil(((room.phase === 'voting' ? new Date(round.voteEndsAt ?? now).getTime() : new Date(round.debateEndsAt).getTime()) - now) / 1000))
+        room.pauseReason = 'low_players'; room.phase = 'paused'
+      } else if (room.phase === 'debating' && now >= new Date(round?.debateEndsAt ?? now).getTime()) {
+        room.phase = 'voting'; if (round) round.voteEndsAt = new Date(now + VOTE_SECONDS * 1000).toISOString()
+      } else if (room.phase === 'voting' && now >= new Date(round?.voteEndsAt ?? now).getTime()) {
+        finalizeRound(room, random)
+      }
+    }
+    const host = room.players.find((player) => player.id === room.hostId)
+    if (host && !isConnected(host, now) && new Date(host.lastSeenAt ?? 0).getTime() < now - HOST_GRACE_MS && connected.length >= MIN_PLAYERS) {
+      const nextHost = [...connected].filter((player) => player.id !== host.id).sort((left, right) => left.id.localeCompare(right.id))[0]
+      if (nextHost) { room.players.forEach((player) => { player.isHost = player.id === nextHost.id }); room.hostId = nextHost.id }
+    }
+  })
+}
+
+export function pauseMockGame(code: string, actorId: string, now = Date.now()): MockRoom | null {
+  return mutateRoom(code, (room) => {
+    if (actorId !== room.hostId || (room.phase !== 'debating' && room.phase !== 'voting')) return
+    const round = currentRound(room); room.pausedPhase = room.phase; room.pausedRemainingSeconds = Math.max(0, Math.ceil(((room.phase === 'voting' ? new Date(round.voteEndsAt ?? now).getTime() : new Date(round.debateEndsAt).getTime()) - now) / 1000)); room.pauseReason = 'host'; room.phase = 'paused'
+  })
+}
+
+export function resumeMockGame(code: string, actorId: string, now = Date.now()): MockRoom | null {
+  return mutateRoom(code, (room) => {
+    if (actorId !== room.hostId || room.phase !== 'paused' || room.players.filter((player) => isConnected(player, now)).length < MIN_PLAYERS) return
+    const round = currentRound(room); const remaining = room.pausedRemainingSeconds ?? 0
+    if (room.pausedPhase === 'voting') round.voteEndsAt = new Date(now + remaining * 1000).toISOString()
+    else round.debateEndsAt = new Date(now + remaining * 1000).toISOString()
+    room.phase = room.pausedPhase ?? 'debating'; room.pausedPhase = null; room.pausedRemainingSeconds = null; room.pauseReason = null
+  })
+}
+
+export function rematchMockGame(code: string, actorId: string): MockRoom | null {
+  const room = getMockRoom(code)
+  if (!room || actorId !== room.hostId || room.phase !== 'finished') return room
+  const now = Date.now(); const connected = room.players.filter((player) => isConnected(player, now))
+  const host = connected.find((player) => player.id === actorId)
+  if (!host) return room
+  let nextCode = generateRoomCode(); while (getMockRoom(nextCode)) nextCode = generateRoomCode()
+  const nextPlayers = connected.map((player) => ({ ...player, isHost: player.id === host.id, score: 0, juryRounds: 0, activeFromRound: 1, lastSeenAt: new Date(now).toISOString() }))
+  const next: MockRoom = { code: nextCode, hostId: host.id, intensity: room.intensity, phase: 'lobby', players: nextPlayers, rounds: [], decks: createDecks(), lastOddExtraSide: null, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 86400000).toISOString(), connectedPlayerIds: nextPlayers.map((player) => player.id) }
+  room.successorCode = nextCode; saveMockRoom(room); saveMockRoom(next); savePlayerSession(nextCode, host.id)
+  return next
+}
 export const mockDurations = { debateSeconds: DEBATE_SECONDS, voteSeconds: VOTE_SECONDS }

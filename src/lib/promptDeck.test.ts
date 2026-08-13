@@ -25,14 +25,17 @@ describe('mazo local persistente', () => {
     rounds.slice(1).forEach((round, index) => expect(round.prompt.category).not.toBe(rounds[index].prompt.category))
   })
 
-  it('mantiene el mazo al pedir revancha y sigue con las próximas cinco consignas', () => {
+  it('crea una sala nueva al pedir revancha y no altera el historial original', () => {
     const room = roomWithPlayers(); startMockGame(room.code, room.hostId, random)
     for (let index = 0; index < 4; index += 1) finishRound(room.code, room.hostId)
     const finished = finishRound(room.code, room.hostId); const firstFive = finished.rounds.map((round) => round.promptId)
-    const replay = rematchMockGame(room.code, room.hostId)!; startMockGame(replay.code, replay.hostId, random)
+    const replay = rematchMockGame(room.code, room.hostId)!
+    expect(replay.code).not.toBe(room.code)
+    expect(getMockRoom(room.code)?.rounds.map((round) => round.promptId)).toEqual(firstFive)
+    startMockGame(replay.code, replay.hostId, random)
     for (let index = 0; index < 4; index += 1) finishRound(replay.code, replay.hostId)
-    const nextFive = getMockRoom(room.code)!.rounds.map((round) => round.promptId)
-    expect(nextFive.every((id) => !firstFive.includes(id))).toBe(true)
+    const nextFive = getMockRoom(replay.code)!.rounds.map((round) => round.promptId)
+    expect(nextFive).toHaveLength(5)
   })
 
   it('consume una consigna saltada y no la muestra inmediatamente', () => {
