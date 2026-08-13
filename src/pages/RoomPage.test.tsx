@@ -24,6 +24,19 @@ const room: MockRoom = {
   lastOddExtraSide: null, createdAt: '2026-08-12T00:00:00.000Z', expiresAt: '2030-08-13T00:00:00.000Z', serverNow: '2026-08-12T00:00:00.000Z',
 }
 
+function debatingRoom(debateEndsAt: string): MockRoom {
+  return {
+    ...room,
+    phase: 'debating',
+    players: [
+      { id: 'host', nickname: 'Host', isHost: true, score: 0, activeFromRound: 1, juryRounds: 0 },
+      { id: 'guest', nickname: 'Mili', isHost: false, score: 0, activeFromRound: 1, juryRounds: 0 },
+      { id: 'third', nickname: 'Tomi', isHost: false, score: 0, activeFromRound: 1, juryRounds: 0 },
+    ],
+    rounds: [{ number: 1, promptId: 'asado-tarde', prompt: { id: 'asado-tarde', category: 'Asado', intensity: 'tranqui', status: 'active', text: 'Consigna de prueba', sideA: 'A favor', sideB: 'En contra' }, jurorIds: ['third'], assignments: { host: 'A', guest: 'B' }, debateEndsAt, voteEndsAt: null, votes: [], changeRequests: [], result: undefined, wasRandomTiebreak: false }],
+  }
+}
+
 function renderRoom() {
   return render(<MemoryRouter initialEntries={['/sala/ABCD2345']}><Routes><Route path="/sala/:code" element={<RoomPage />} /><Route path="/" element={<p>Inicio</p>} /></Routes></MemoryRouter>)
 }
@@ -77,5 +90,26 @@ describe('acceso de invitados a una sala realtime', () => {
     expect(await screen.findByRole('heading', { name: 'La mesa está servida.' })).toBeInTheDocument()
     await waitFor(() => expect(service.subscribeRoom).toHaveBeenCalledWith('ABCD2345', 'guest', expect.any(Function), expect.any(Function)))
     expect(service.getRoom).not.toHaveBeenCalled()
+  })
+
+  it('muestra el adelanto sólo al host y abre automáticamente al llegar a cero', async () => {
+    const debate = debatingRoom('2020-01-01T00:00:00.000Z')
+    const voting = { ...debate, phase: 'voting' as const, rounds: [{ ...debate.rounds[0], voteEndsAt: new Date(Date.now() + 30_000).toISOString() }] }
+    service.localPlayerId.mockReturnValue('host')
+    service.getRoom.mockResolvedValue(debate)
+    service.openVoting.mockResolvedValue(voting)
+    renderRoom()
+
+    await waitFor(() => expect(service.openVoting).toHaveBeenCalledWith(debate, 'host'))
+  })
+
+  it('no muestra el adelanto a quien no es host', async () => {
+    const debate = debatingRoom(new Date(Date.now() + 50_000).toISOString())
+    service.localPlayerId.mockReturnValue('guest')
+    service.getRoom.mockResolvedValue(debate)
+    renderRoom()
+
+    await screen.findByText('Consigna de prueba')
+    expect(screen.queryByRole('button', { name: /abrir votación ahora/i })).not.toBeInTheDocument()
   })
 })

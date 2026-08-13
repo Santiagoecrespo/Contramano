@@ -81,6 +81,24 @@ describe('flujo local con jurado', () => {
     expect(full.players.some((player) => player.nickname === 'Novena')).toBe(false)
   })
 
+  it('permite al host abrir la votación antes de que termine el debate y es idempotente', () => {
+    const room = roomWith(3)
+    const before = getMockRoom(room.code)!.rounds[0].debateEndsAt
+    const opened = advanceToVoting(room.code, room.hostId)!
+    expect(opened.phase).toBe('voting')
+    expect(opened.rounds[0].voteEndsAt).not.toBeNull()
+    expect(opened.rounds[0].debateEndsAt).toBe(before)
+    expect(advanceToVoting(room.code, room.hostId)!.rounds[0].voteEndsAt).toBe(opened.rounds[0].voteEndsAt)
+  })
+
+  it('rechaza que un jugador que no es host adelante la votación', () => {
+    const room = roomWith(3)
+    const guestId = room.players.find((player) => !player.isHost)!.id
+    const unchanged = advanceToVoting(room.code, guestId)!
+    expect(unchanged.phase).toBe('debating')
+    expect(unchanged.rounds[0].voteEndsAt).toBeNull()
+  })
+
   it('sólo permite votar a jurados y cierra al recibir todos los votos', () => {
     const room = roomWith(6)
     const voting = advanceToVoting(room.code, room.hostId)!

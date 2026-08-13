@@ -42,7 +42,7 @@ Sin variables de Supabase, el adaptador local de Hito 2 sigue siendo el respaldo
 
 1. Creá un proyecto en Supabase y activá **Anonymous sign-ins** en Authentication > Providers.
 2. Para un proyecto nuevo, ejecutá una única vez en SQL Editor el contenido completo de [`supabase/migrations/202608120001_realtime_multiplayer.sql`](supabase/migrations/202608120001_realtime_multiplayer.sql), que ya incluye el arreglo de creación de jurados.
-   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá solamente [`supabase/migrations/202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql): reemplaza de forma segura la función que crea las rondas y no borra datos ni tablas.
+   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá en orden [`202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql) y [`202608130001_allow_host_early_voting.sql`](supabase/migrations/202608130001_allow_host_early_voting.sql). Ambas reemplazan funciones de forma segura y no borran datos ni tablas.
 3. Copiá `.env.example` como `.env.local` y completá los valores públicos del proyecto:
 
 ```dotenv
@@ -58,7 +58,7 @@ Para probarlo, abrí la sala en perfiles o navegadores separados. El host inicia
 
 ### Prueba manual recomendada
 
-Después de ejecutar la migración correctiva, abrí una ventana normal y dos incógnitas (o tres navegadores): creá una sala con el host y abrí el link desde las otras dos sesiones. Cada invitado debe ver primero el formulario **Unirme a la mesa**, sin errores de snapshot; ingresá apodos distintos y verificá que el lobby pase a tres personas. Iniciá la partida, comprobá que hay un jurado, terminá una votación y recargá una sesión. Si algo falla, revisá la consola: en desarrollo cada RPC registra su nombre y el error de Supabase una sola vez, mientras la interfaz muestra un mensaje entendible.
+Después de ejecutar las migraciones correctivas, abrí una ventana normal y dos incógnitas (o tres navegadores): creá una sala con el host y abrí el link desde las otras dos sesiones. Cada invitado debe ver primero el formulario **Unirme a la mesa**, sin errores de snapshot; ingresá apodos distintos y verificá que el lobby pase a tres personas. Iniciá la partida, comprobá que hay un jurado y usá **Abrir votación ahora** antes de que llegue a cero: sólo el host debe verlo y todos deben pasar a votar. También esperá el fin natural del contador en otra ronda. Si algo falla, revisá la consola: en desarrollo cada RPC registra su nombre y el error de Supabase una sola vez, mientras la interfaz muestra un mensaje entendible.
 
 ## Decisión acordada para `start_round()`
 
