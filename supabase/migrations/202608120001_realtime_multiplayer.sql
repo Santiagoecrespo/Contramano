@@ -712,4 +712,4 @@ begin
 end $$;
 
 grant execute on function public.heartbeat(text),public.reconcile_room(text),public.resume_room_member(text) to authenticated;
-grant execute on function public.advance_to_voting(text),public.cast_vote(text,text),public.close_voting(text),public.pause_game(text),public.resume_game(text),public.rematch(text),public.join_room(text),public.get_room_snapshot(text) to authenticated;
+grant execute on function public.advance_to_voting(text),public.cast_vote(text,text),public.close_voting(text),public.pause_game(text),public.resume_game(text),public.rematch(text),public.join_room(text,text),public.get_room_snapshot(text) to authenticated;

@@ -9,6 +9,7 @@ const earlyVotingMigration = readFileSync(resolve(process.cwd(), 'supabase/migra
 const editorialCatalogMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql'), 'utf8')
 const editorialTighteningMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130003_tighten_prompt_conflicts.sql'), 'utf8')
 const resilienceMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130004_add_resilience.sql'), 'utf8')
+const joinRoomGrantFix = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130005_fix_join_room_grant.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -83,5 +84,13 @@ describe('migraciones Supabase de rondas', () => {
     expect(resilienceMigration).toContain("'rematch_started'")
     expect(resilienceMigration).not.toMatch(/delete\s+from\s+public\.(rounds|votes|players)/i)
     expect(rootMigration).toContain('Hito 4 base installation')
+  })
+
+  it('otorga permisos a join_room con sus dos argumentos', () => {
+    const grant = 'grant execute on function public.join_room(text,text) to authenticated;'
+    expect(rootMigration).toContain('public.join_room(text,text)')
+    expect(resilienceMigration).toContain('public.join_room(text,text)')
+    expect(joinRoomGrantFix).toContain(grant)
+    expect(resilienceMigration).not.toContain('public.join_room(text),')
   })
 })
