@@ -7,6 +7,7 @@ const rootMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/2
 const correctiveMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608120002_fix_start_new_round_jurors.sql'), 'utf8')
 const earlyVotingMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130001_allow_host_early_voting.sql'), 'utf8')
 const editorialCatalogMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql'), 'utf8')
+const editorialTighteningMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130003_tighten_prompt_conflicts.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -39,5 +40,21 @@ describe('migraciones Supabase de rondas', () => {
     expect(editorialCatalogMigration).not.toMatch(/\bdelete\s+from\b/i)
     expect(editorialCatalogMigration).not.toMatch(/row level security/i)
     expect(promptPreviews).toHaveLength(160)
+  })
+
+  it('aplica la revisión de conflictos sin alterar IDs ni historial', () => {
+    const rows = [...editorialTighteningMigration.matchAll(/^\s+\('([^']+)', '([^']+)', '([^']+)', '([^']+)'\)/gm)]
+    expect(rows).toHaveLength(67)
+    expect(new Set(rows.map((row) => row[1])).size).toBe(67)
+    rows.forEach(([, id, text, sideA, sideB]) => {
+      expect(promptPreviews.find((prompt) => prompt.id === id)).toMatchObject({ text, sideA, sideB })
+    })
+    const rootRows = [...rootMigration.matchAll(/^\s+\('([^']+)', '([^']+)', '([^']+)', '([^']+)'\)/gm)]
+    expect(rootRows).toHaveLength(67)
+    expect(rootRows.map((row) => row.slice(1, 5))).toEqual(rows.map((row) => row.slice(1, 5)))
+    expect(editorialTighteningMigration).toContain("('convivencia-lista', 'El que compra para todos no tiene por qué perseguir transferencias.', 'No tiene por qué', 'Le toca insistir')")
+    expect(rootMigration).toContain('Editorial tightening v2')
+    expect(rootMigration).toContain('El que compra para todos no tiene por qué perseguir transferencias.')
+    expect(editorialTighteningMigration).not.toMatch(/\bdelete\s+from\b/i)
   })
 })

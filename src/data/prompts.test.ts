@@ -32,6 +32,25 @@ describe('catálogo editorial de consignas', () => {
     expect(new Set(normalized).size).toBe(normalized.length)
   })
 
+  it('reemplaza las formulaciones vagas por conflictos concretos', () => {
+    const retiredCopy = [
+      'El pan con chimichurri merece protagonismo propio.',
+      'El mate es más excusa para charlar que bebida.',
+      'La lista de compras compartida sólo sirve si alguien la persigue.',
+      'El que se ofrece a pagar y después persigue transferencias se contradice.',
+      'Tardar demasiado en el baño cuando hay gente esperando es egoísmo.',
+      'En un viaje siempre aparece alguien que se cree responsable sin votación.',
+      'Decir “yo pongo música” sin que nadie lo pida es una advertencia.',
+    ]
+    retiredCopy.forEach((text) => expect(promptPreviews.some((prompt) => prompt.text === text)).toBe(false))
+
+    expect(findPrompt('convivencia-lista')).toMatchObject({
+      text: 'El que compra para todos no tiene por qué perseguir transferencias.',
+      sideA: 'No tiene por qué',
+      sideB: 'Le toca insistir',
+    })
+  })
+
   it('documenta los pares cercanos revisados para evitar duplicados semánticos', () => {
     expect(editorialReviewedPairs.length).toBeGreaterThanOrEqual(8)
     editorialReviewedPairs.forEach(([first, second, reason]) => {
