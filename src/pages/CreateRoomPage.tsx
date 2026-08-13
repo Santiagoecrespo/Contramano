@@ -36,8 +36,8 @@ export function CreateRoomPage() {
           <fieldset>
             <legend>Intensidad de la noche</legend>
             <div className="intensity-grid">
-              <button type="button" onClick={() => setIntensity('tranqui')} className={intensity === 'tranqui' ? 'choice selected' : 'choice'}><span>Tranqui</span><small>Para discutir sin subir el volumen.</small></button>
-              <button type="button" onClick={() => setIntensity('bardo')} className={intensity === 'bardo' ? 'choice selected bardo' : 'choice bardo'}><span>Modo Bardo</span><small>Más filoso, siempre entre amigos.</small></button>
+              <button type="button" onClick={() => setIntensity('tranqui')} className={intensity === 'tranqui' ? 'choice selected' : 'choice'}><span>Tranqui <i aria-hidden="true">01</i></span><small>Para discutir sin subir el volumen.</small></button>
+              <button type="button" onClick={() => setIntensity('bardo')} className={intensity === 'bardo' ? 'choice selected bardo' : 'choice bardo'}><span>Modo Bardo <i aria-hidden="true">02</i></span><small>Más filoso, siempre entre amigos.</small></button>
             </div>
           </fieldset>
           {error && <p className="form-error" role="alert">{error}</p>}
