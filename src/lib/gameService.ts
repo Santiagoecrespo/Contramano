@@ -9,6 +9,8 @@ import {
 const LOCAL_PLAYER_PREFIX = 'contramano:player:'
 export const isRealtimeMode = isSupabaseConfigured
 
+export type RoomAccessError = { message: string; terminal: boolean }
+
 function unwrap(snapshot: unknown): MockRoom {
   if (!snapshot || typeof snapshot !== 'object') throw new Error('La sala no devolvió un estado válido.')
   return snapshot as MockRoom
@@ -20,6 +22,25 @@ async function rpc(name: string, params: Record<string, unknown>): Promise<MockR
   const { data, error } = await supabase.rpc(name, params)
   if (error) throw error
   return unwrap(data)
+}
+
+export async function prepareRoomVisit(): Promise<void> {
+  if (isRealtimeMode) await ensureAnonymousSession()
+}
+
+export function roomAccessError(error: unknown): RoomAccessError {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message?: unknown }).message ?? '')
+      : String(error ?? '')
+  const normalized = message.toLowerCase()
+  if (normalized.includes('no encontrada')) return { message: 'No encontramos esa sala. Revisá el link o el código.', terminal: true }
+  if (normalized.includes('vencida')) return { message: 'Esta sala ya venció. Creá otra para seguir jugando.', terminal: true }
+  if (normalized.includes('completa')) return { message: 'La sala está completa: ya hay 8 personas.', terminal: true }
+  if (normalized.includes('terminó') || normalized.includes('termino')) return { message: 'Esta partida ya terminó y no admite más participantes.', terminal: true }
+  if (normalized.includes('duplicate') || normalized.includes('ya existe')) return { message: 'Ese apodo ya está en uso en esta sala. Elegí otro.', terminal: false }
+  return { message: 'No pudimos entrar a la sala. Probá de nuevo.', terminal: false }
 }
 
 export async function createRoom(nickname: string, intensity: Intensity): Promise<MockRoom> {
@@ -45,10 +66,11 @@ export async function joinRoom(code: string, nickname: string): Promise<MockRoom
 
 export async function getRoom(code: string): Promise<MockRoom | null> {
   if (!isRealtimeMode) return getMockRoom(code)
-  try { return await rpc('get_room_snapshot', { p_code: code }) } catch { return null }
+  return rpc('get_room_snapshot', { p_code: code })
 }
 
 export function localPlayerId(code: string): string | null { return getLocalPlayerId(code) }
+export function forgetLocalPlayer(code: string): void { localStorage.removeItem(`${LOCAL_PLAYER_PREFIX}${code.toUpperCase()}`) }
 export async function startGame(room: MockRoom, actorId: string): Promise<MockRoom> { return isRealtimeMode ? rpc('start_game', { p_room_id: room.code }) : startMockGame(room.code, actorId)! }
 export async function openVoting(room: MockRoom, actorId: string): Promise<MockRoom> { return isRealtimeMode ? rpc('advance_to_voting', { p_room_id: room.code }) : advanceToVoting(room.code, actorId)! }
 export async function vote(room: MockRoom, actorId: string, side: Side): Promise<MockRoom> { return isRealtimeMode ? rpc('cast_vote', { p_room_id: room.code, p_side: side }) : castMockVote(room.code, actorId, side)! }

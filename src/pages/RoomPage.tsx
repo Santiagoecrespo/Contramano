@@ -4,18 +4,21 @@ import { Layout } from '../components/Layout'
 import { QrModal } from '../components/QrModal'
 import {
   addDemo, changeIntensity, closeVoting, confirmChange, getRoom, isRealtimeMode, joinRoom,
-  localPlayerId, nextRound, openVoting, rematch, requestChange, startGame, subscribeRoom, vote,
+  forgetLocalPlayer, localPlayerId, nextRound, openVoting, prepareRoomVisit, rematch, requestChange,
+  roomAccessError, startGame, subscribeRoom, vote,
 } from '../lib/gameService'
 import { MAX_PLAYERS } from '../lib/mockRoom'
 import type { MockRoom, Side } from '../types/game'
 
 function timeLeft(endsAt: string | null, now: number): number { return endsAt ? Math.max(0, Math.ceil((new Date(endsAt).getTime() - now) / 1000)) : 0 }
 function displayTime(seconds: number): string { return `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}` }
+type AccessState = 'checking' | 'guest' | 'member' | 'blocked'
 
 export function RoomPage() {
   const { code = '' } = useParams()
   const [room, setRoom] = useState<MockRoom | null>(null)
   const [playerId, setPlayerId] = useState<string | null>(() => localPlayerId(code))
+  const [accessState, setAccessState] = useState<AccessState>('checking')
   const [showQr, setShowQr] = useState(false)
   const [now, setNow] = useState(Date.now())
   const [serverOffset, setServerOffset] = useState(0)
@@ -29,11 +32,39 @@ export function RoomPage() {
   }, [])
   const refresh = useCallback(async () => {
     const next = await getRoom(code)
-    if (next) applySnapshot(next)
+    if (!next) throw new Error('Sala no encontrada')
+    applySnapshot(next)
   }, [applySnapshot, code])
 
-  useEffect(() => { void refresh() }, [refresh])
-  useEffect(() => subscribeRoom(code, playerId, () => { void refresh() }, setOnlinePlayerIds), [code, playerId, refresh])
+  useEffect(() => {
+    let cancelled = false
+    async function establishAccess() {
+      setAccessState('checking'); setRoom(null); setError(''); setOnlinePlayerIds([])
+      try {
+        await prepareRoomVisit()
+        if (cancelled) return
+        const storedPlayerId = localPlayerId(code)
+        setPlayerId(storedPlayerId)
+        if (isRealtimeMode && !storedPlayerId) {
+          setAccessState('guest')
+          return
+        }
+        await refresh()
+        if (!cancelled) setAccessState(storedPlayerId ? 'member' : 'guest')
+      } catch (caught) {
+        if (cancelled) return
+        const accessError = roomAccessError(caught)
+        if (isRealtimeMode && localPlayerId(code)) forgetLocalPlayer(code)
+        setPlayerId(null); setError(accessError.message); setAccessState(accessError.terminal ? 'blocked' : 'guest')
+      }
+    }
+    void establishAccess()
+    return () => { cancelled = true }
+  }, [code, refresh])
+  useEffect(() => {
+    if (accessState !== 'member' || !room || !playerId) return undefined
+    return subscribeRoom(code, playerId, () => { void refresh().catch((caught) => setError(roomAccessError(caught).message)) }, setOnlinePlayerIds)
+  }, [accessState, code, playerId, refresh, room])
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 250); return () => window.clearInterval(timer) }, [])
 
   const localPlayer = room?.players.find((player) => player.id === playerId) ?? null
@@ -55,12 +86,23 @@ export function RoomPage() {
   function shareWhatsApp() { window.open(`https://wa.me/?text=${encodeURIComponent(`Caé a mi mesa de Contramano. Entrá acá: ${roomUrl}`)}`, '_blank', 'noopener,noreferrer') }
   async function joinFromLink(event: FormEvent) {
     event.preventDefault()
-    try { const next = await joinRoom(code, joinNickname.trim()); setPlayerId(localPlayerId(code)); applySnapshot(next); setError('') } catch { setError('Revisá el código o verificá si la sala está completa.') }
+    try {
+      setError('')
+      const next = await joinRoom(code, joinNickname.trim())
+      setPlayerId(localPlayerId(code)); applySnapshot(next); setAccessState('member')
+    } catch (caught) {
+      const accessError = roomAccessError(caught)
+      setError(accessError.message)
+      if (accessError.terminal) setAccessState('blocked')
+    }
   }
 
-  if (!room) return <Layout><section className="empty-state"><p className="eyebrow">CARGANDO SALA</p><h1>Buscando la mesa…</h1>{error && <p className="form-error">{error}</p>}</section></Layout>
+  if (accessState === 'checking') return <Layout><section className="empty-state"><p className="eyebrow">CARGANDO SALA</p><h1>Buscando la mesa…</h1></section></Layout>
+  if (accessState === 'blocked') return <Layout><section className="empty-state"><p className="eyebrow">NO PUDIMOS ABRIR LA SALA</p><h1>{error || 'Esta sala no está disponible.'}</h1><Link className="button button-primary" to="/">Volver al inicio</Link></section></Layout>
+  if (accessState === 'guest') return <Layout><section className="form-page join-link-page"><p className="eyebrow">ENTRASTE A UNA MESA</p><h1>Falta saber cómo te llamamos.</h1><form className="form-card" onSubmit={joinFromLink}><label htmlFor="shared-nickname">Tu apodo</label><input id="shared-nickname" autoFocus maxLength={16} value={joinNickname} onChange={(event) => setJoinNickname(event.target.value)} placeholder="Cómo te dicen" />{error && <p className="form-error" role="alert">{error}</p>}<button className="button button-primary form-submit" type="submit" disabled={joinNickname.trim().length < 2}>Unirme a la mesa <span>→</span></button><p className="microcopy">No instalás nada. Jugás desde este link.</p></form></section></Layout>
+  if (!room) return <Layout><section className="empty-state"><p className="eyebrow">SALA NO DISPONIBLE</p><h1>No pudimos cargar esta mesa.</h1><Link className="button button-primary" to="/">Volver al inicio</Link></section></Layout>
   if (new Date(room.expiresAt).getTime() <= Date.now()) return <Layout><section className="empty-state"><p className="eyebrow">SALA VENCIDA</p><h1>Esta mesa ya terminó su tiempo.</h1><Link className="button button-primary" to="/">Crear otra sala</Link></section></Layout>
-  if (!localPlayer) return <Layout><section className="form-page join-link-page"><p className="eyebrow">ENTRASTE A UNA MESA</p><h1>Falta saber cómo te llamamos.</h1><form className="form-card" onSubmit={joinFromLink}><label htmlFor="shared-nickname">Tu apodo</label><input id="shared-nickname" autoFocus maxLength={16} value={joinNickname} onChange={(event) => setJoinNickname(event.target.value)} placeholder="Cómo te dicen" />{error && <p className="form-error" role="alert">{error}</p>}<button className="button button-primary form-submit" type="submit" disabled={joinNickname.trim().length < 2}>Entrar a la mesa <span>→</span></button><p className="microcopy">No instalás nada. Jugás desde este link.</p></form></section></Layout>
+  if (!localPlayer) return <Layout><section className="empty-state"><p className="eyebrow">ACCESO NO VÁLIDO</p><h1>Tu sesión no pertenece a esta sala.</h1><Link className="button button-primary" to="/">Volver al inicio</Link></section></Layout>
 
   const mySide = currentRound?.assignments[localPlayer.id]
   const amJuror = currentRound?.jurorIds.includes(localPlayer.id) ?? false
