@@ -62,9 +62,9 @@ export function RoomPage() {
     return () => { cancelled = true }
   }, [code, refresh])
   useEffect(() => {
-    if (accessState !== 'member' || !room || !playerId) return undefined
+    if (accessState !== 'member' || !playerId) return undefined
     return subscribeRoom(code, playerId, () => { void refresh().catch((caught) => setError(roomAccessError(caught).message)) }, setOnlinePlayerIds)
-  }, [accessState, code, playerId, refresh, room])
+  }, [accessState, code, playerId, refresh])
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 250); return () => window.clearInterval(timer) }, [])
 
   const localPlayer = room?.players.find((player) => player.id === playerId) ?? null

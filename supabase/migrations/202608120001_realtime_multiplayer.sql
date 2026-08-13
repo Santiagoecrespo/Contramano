@@ -165,7 +165,7 @@ begin
   loop
     pos:=pos+1; insert into round_players(round_id,player_id,role,side) values(new_round,candidate.id,'debater',case when pos<=target_a then 'A' else 'B' end);
   end loop;
-  insert into round_players(round_id,player_id,role) select new_round,unnest(jurors);
+  insert into round_players(round_id,player_id,role) select new_round,unnest(jurors),'juror';
   update rooms set round_count=n,phase='playing',last_odd_extra_side=coalesce(extra,last_odd_extra_side) where id=p_room;
   insert into events(room_id,name,metadata) values(p_room,'round_started',jsonb_build_object('round',n));
 end $$;

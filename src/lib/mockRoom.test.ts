@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { advanceToVoting, assignPostures, castMockVote, closeMockVoting, confirmPromptChange, continueMockGame, createMockRoom, getMockRoom, joinMockRoom, jurorCountFor, rematchMockGame, requestPromptChange, saveMockRoom, selectJurors, startMockGame } from './mockRoom'
+import { advanceToVoting, assignPostures, castMockVote, closeMockVoting, confirmPromptChange, continueMockGame, createMockRoom, getMockRoom, joinMockRoom, jurorCountFor, rematchMockGame, requestPromptChange, saveMockRoom, selectJurors, setMockIntensity, startMockGame } from './mockRoom'
 import type { MockPlayer } from '../types/game'
 
 const lowRandom = () => 0
@@ -48,6 +48,32 @@ describe('flujo local con jurado', () => {
     return startMockGame(room.code, room.hostId, lowRandom)!
   }
 
+  function assertRoundShape(room: NonNullable<ReturnType<typeof getMockRoom>>, playerCount: number) {
+    const round = room.rounds.at(-1)!
+    const jurors = room.players.filter((player) => round.jurorIds.includes(player.id))
+    const debaterIds = Object.keys(round.assignments)
+    const sideA = debaterIds.filter((id) => round.assignments[id] === 'A')
+    const sideB = debaterIds.filter((id) => round.assignments[id] === 'B')
+    expect(jurors).toHaveLength(playerCount >= 6 ? 2 : 1)
+    expect(new Set([...round.jurorIds, ...debaterIds]).size).toBe(playerCount)
+    expect([...round.jurorIds, ...debaterIds]).toHaveLength(playerCount)
+    expect(jurors.every((player) => round.assignments[player.id] === undefined)).toBe(true)
+    expect(debaterIds.every((id) => !round.jurorIds.includes(id) && ['A', 'B'].includes(round.assignments[id]))).toBe(true)
+    expect(Math.abs(sideA.length - sideB.length)).toBeLessThanOrEqual(1)
+  }
+
+  function finishRound(room: NonNullable<ReturnType<typeof getMockRoom>>) {
+    const voting = advanceToVoting(room.code, room.hostId)!
+    voting.rounds.at(-1)!.jurorIds.forEach((jurorId) => castMockVote(room.code, jurorId, 'A', lowRandom))
+    return getMockRoom(room.code)!
+  }
+
+  it.each([3, 4, 5, 6, 7, 8])('inicia y crea una ronda válida para %i jugadores', (playerCount) => {
+    const room = roomWith(playerCount)
+    assertRoundShape(room, playerCount)
+    expect(room.phase).toBe('debating')
+  })
+
   it('impide entrar cuando la sala tiene ocho jugadores', () => {
     const room = roomWith(8)
     const full = joinMockRoom(room.code, 'Novena')!
@@ -63,12 +89,35 @@ describe('flujo local con jurado', () => {
     expect(getMockRoom(room.code)!.rounds[0].votes).toHaveLength(0)
     const jurors = voting.rounds[0].jurorIds
     castMockVote(room.code, jurors[0], 'A')
+    castMockVote(room.code, jurors[0], 'B')
+    expect(getMockRoom(room.code)!.rounds[0].votes).toHaveLength(1)
     castMockVote(room.code, jurors[1], 'A')
     const result = getMockRoom(room.code)!
     expect(result.phase).toBe('results')
     expect(result.rounds[0].result).toBe('A')
     expect(result.players.filter((player) => result.rounds[0].assignments[player.id] === 'A').every((player) => player.score === 1)).toBe(true)
     expect(result.players.filter((player) => result.rounds[0].jurorIds.includes(player.id)).every((player) => player.score === 0)).toBe(true)
+  })
+
+  it.each([3, 5, 6, 8])('completa cinco rondas con %i jugadores sin repetir jurado cuando hay alternativa', (playerCount) => {
+    let room = roomWith(playerCount)
+    const jurorHistory: string[][] = [room.rounds[0].jurorIds]
+    for (let roundNumber = 1; roundNumber <= 5; roundNumber += 1) {
+      expect(room.phase).toBe('debating')
+      assertRoundShape(room, playerCount)
+      room = finishRound(room)
+      expect(room.phase).toBe('results')
+      if (roundNumber < 5) {
+        room = continueMockGame(room.code, room.hostId, lowRandom)!
+        jurorHistory.push(room.rounds.at(-1)!.jurorIds)
+      }
+    }
+    expect(room.phase).toBe('results')
+    const finished = continueMockGame(room.code, room.hostId, lowRandom)!
+    expect(finished.phase).toBe('finished')
+    jurorHistory.slice(1).forEach((jurors, index) => {
+      if (playerCount > jurors.length) expect(jurors.some((id) => !jurorHistory[index].includes(id))).toBe(true)
+    })
   })
 
   it('resuelve empate de jurados con desempate aleatorio informado', () => {
@@ -100,6 +149,19 @@ describe('flujo local con jurado', () => {
     const confirmed = confirmPromptChange(room.code, room.hostId)!
     expect(confirmed.rounds[0].promptId).not.toBe(original)
     expect(confirmed.rounds[0].changeRequests).toHaveLength(0)
+  })
+
+  it('cambia intensidad entre rondas y activa al jugador tardío sólo en la siguiente', () => {
+    const room = roomWith(3)
+    const late = joinMockRoom(room.code, 'Tarde')!
+    const latePlayer = late.players.find((player) => player.nickname === 'Tarde')!
+    expect(latePlayer.activeFromRound).toBe(2)
+    expect(late.rounds[0].jurorIds.includes(latePlayer.id) || late.rounds[0].assignments[latePlayer.id]).toBeFalsy()
+    const result = finishRound(late)
+    setMockIntensity(result.code, result.hostId, 'bardo')
+    const next = continueMockGame(result.code, result.hostId, lowRandom)!
+    expect(next.intensity).toBe('bardo')
+    expect(next.rounds[1].jurorIds.includes(latePlayer.id) || next.rounds[1].assignments[latePlayer.id]).toBeTruthy()
   })
 
   it('permite al host cerrar votación incompleta y reinicia jurados y puntajes en revancha', () => {

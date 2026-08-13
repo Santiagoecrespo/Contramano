@@ -20,7 +20,10 @@ async function rpc(name: string, params: Record<string, unknown>): Promise<MockR
   if (!supabase) throw new Error('Supabase no está configurado.')
   await ensureAnonymousSession()
   const { data, error } = await supabase.rpc(name, params)
-  if (error) throw error
+  if (error) {
+    if (import.meta.env.DEV) console.error(`[Contramano RPC] ${name}`, error)
+    throw new Error(error.message)
+  }
   return unwrap(data)
 }
 
@@ -60,7 +63,8 @@ export async function joinRoom(code: string, nickname: string): Promise<MockRoom
   const room = await rpc('join_room', { p_code: code, p_nickname: nickname })
   const viewerPlayerId = (room as MockRoom & { viewerPlayerId?: string }).viewerPlayerId
   const player = room.players.find((candidate) => candidate.id === viewerPlayerId || candidate.nickname.toLowerCase() === nickname.toLowerCase())
-  if (player) localStorage.setItem(`${LOCAL_PLAYER_PREFIX}${room.code}`, player.id)
+  if (!player) throw new Error('No pudimos confirmar tu ingreso a la sala.')
+  localStorage.setItem(`${LOCAL_PLAYER_PREFIX}${room.code}`, player.id)
   return room
 }
 
