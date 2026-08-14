@@ -1,23 +1,30 @@
-# Contramano
++# Contramano
 
-Juego web para juntadas: entrás por QR o link, te toca una postura, debatís, votás y sumás puntos. No es una app instalable.
+Juego web para juntadas: alguien crea una mesa, comparte un link o QR, la gente entra con apodo y juegan cinco rondas de debate con jurado rotativo. No es una app instalable: funciona desde el navegador del celular.
 
-## Hitos 1, 2 y 3
+## Qué hace hoy
 
-Incluye landing mobile-first, creación y unión simuladas, lobby, QR, enlace de WhatsApp, diseño responsive y almacenamiento mock en `localStorage`.
+- Salas de 3 a 8 personas, con código de 8 caracteres no ambiguos.
+- Cinco rondas por partida, mazos separados para **Tranqui** y **Modo Bardo**.
+- Jurado rotativo: una persona con 3–5 jugadores y dos con 6–8.
+- Equipos A/B equilibrados entre quienes debaten; el jurado vota en privado.
+- Resultado, desempate aleatorio informado, puntajes y ranking final.
+- Link, QR y compartir por WhatsApp.
+- Salas sincronizadas por Supabase Realtime, con RLS y sesiones anónimas.
+- Pausa bajo tres personas conectadas, recuperación tras recarga y transferencia de host si falta 45 segundos.
+- Revancha en una sala nueva con código nuevo, puntajes en cero e historial de la anterior conservado.
+- Sin Supabase configurado, queda disponible una demo local guardada en `localStorage`.
 
-El juego permite cinco rondas con **jurado rotativo**: la sala admite de 3 a 8 personas; con 3–5 juega un jurado y con 6–8, dos. El jurado no debate ni recibe postura, vota en privado y el resto se divide en equipos A/B balanceados. Si los dos jurados empatan, aparece “Desempate del caos” y se informa que la postura ganadora fue elegida aleatoriamente. Con Supabase configurado, las salas se sincronizan en tiempo real.
-
-Cada sala crea dos mazos persistentes, uno `tranqui` y otro `bardo`. Las consignas se mezclan una vez, se consumen sin repetirse y el historial queda en el adaptador activo: `localStorage` en modo mock o PostgreSQL en modo realtime. La revancha reinicia sólo la partida: continúa con la siguiente consigna del mazo. Al cambiar intensidad entre rondas, se retoma el mazo independiente de ese modo. Al agotarse, el mazo se remezcla y retrasa las últimas cinco consignas del ciclo anterior.
-
-## Ejecutar
+## Ejecutar localmente
 
 ```powershell
 npm install
 npm run dev
 ```
 
-Abrí la URL que muestre Vite. Para probar el flujo completo: creá una sala, usá **Completar mesa de demo**, empezá la partida, solicitá un cambio de consigna, abrí la votación y usá **Completar votos de demo**. Repetí hasta el ranking final y elegí **Revancha**. Para ver el rol de jurado en otro navegador, abrí el link de sala, ingresá otro apodo antes de iniciar y recargá luego de cada cambio local.
+Abrí la URL que muestra Vite. Para una demo rápida, creá una sala y elegí **Completar mesa de demo**. Podés recorrer las cinco rondas con **Completar votos de demo**.
+
+> En `localhost`, el QR y WhatsApp contienen una URL local. Sirven para probar la interfaz en esa computadora, pero no para abrir la mesa desde otro celular. Para una prueba móvil real usá la URL pública de Vercel.
 
 ## Validar
 
@@ -26,62 +33,221 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
+npm audit --omit=dev
 ```
 
-## Variables de entorno
+## Configuración de Supabase
 
-Copiá `.env.example` a `.env.local` sólo al configurar Supabase en el Hito 3. Nunca subas `.env` ni `.env.local`.
+La app usa autenticación anónima, RLS, RPCs autoritativas, Broadcast privado y Presence solamente como indicador visual. Los temporizadores se muestran con referencia a la hora del servidor.
 
-## Hito 3: Supabase realtime
+1. Creá un proyecto de Supabase.
+2. En **Authentication → Providers**, activá **Anonymous sign-ins**.
+3. Ejecutá las migraciones en **SQL Editor**.
 
-La app suma modo multijugador realtime con Supabase: autenticación anónima, RLS, RPCs para todas las mutaciones, Broadcast privado para refrescar snapshots y Presence usado sólo como indicador visual. Cada snapshot devuelve `server_now`; el cliente conserva su diferencia con el reloj local para mostrar los temporizadores contra el reloj del servidor.
+Para una instalación nueva, ejecutá una sola vez el archivo completo [202608120001_realtime_multiplayer.sql](supabase/migrations/202608120001_realtime_multiplayer.sql).
 
-Sin variables de Supabase, el adaptador local de Hito 2 sigue siendo el respaldo y la demo funciona sin red.
+Si ya habías ejecutado una versión anterior del archivo base, corré en orden:
 
-### Configuración manual
+1. [202608120002_fix_start_new_round_jurors.sql](supabase/migrations/202608120002_fix_start_new_round_jurors.sql)
+2. [202608130001_allow_host_early_voting.sql](supabase/migrations/202608130001_allow_host_early_voting.sql)
+3. [202608130002_expand_editorial_prompt_catalog.sql](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql)
+4. [202608130003_tighten_prompt_conflicts.sql](supabase/migrations/202608130003_tighten_prompt_conflicts.sql)
+5. [202608130004_add_resilience.sql](supabase/migrations/202608130004_add_resilience.sql)
+6. [202608130005_fix_join_room_grant.sql](supabase/migrations/202608130005_fix_join_room_grant.sql) — sólo es necesaria si tu versión de Hito 4 mostró el error de firma de `join_room`.
+7. [202608130006_add_launch_events.sql](supabase/migrations/202608130006_add_launch_events.sql)
 
-1. Creá un proyecto en Supabase y activá **Anonymous sign-ins** en Authentication > Providers.
-2. Para un proyecto nuevo, ejecutá una única vez en SQL Editor el contenido completo de [`supabase/migrations/202608120001_realtime_multiplayer.sql`](supabase/migrations/202608120001_realtime_multiplayer.sql), que ya incluye jurados, votación anticipada y el catálogo editorial completo.
-   Si tu proyecto ya ejecutó una versión anterior de la primera migración, ejecutá en orden [`202608120002_fix_start_new_round_jurors.sql`](supabase/migrations/202608120002_fix_start_new_round_jurors.sql), [`202608130001_allow_host_early_voting.sql`](supabase/migrations/202608130001_allow_host_early_voting.sql), [`202608130002_expand_editorial_prompt_catalog.sql`](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql), [`202608130003_tighten_prompt_conflicts.sql`](supabase/migrations/202608130003_tighten_prompt_conflicts.sql), [`202608130004_add_resilience.sql`](supabase/migrations/202608130004_add_resilience.sql) y [`202608130005_fix_join_room_grant.sql`](supabase/migrations/202608130005_fix_join_room_grant.sql). Todas reemplazan o actualizan datos de forma segura y no borran salas, partidas ni tablas.
-3. Copiá `.env.example` como `.env.local` y completá los valores públicos del proyecto:
+La migración de Hito 5 sólo agrega eventos de lanzamiento y metadatos del salto de consigna. No elimina tablas, datos ni debilita RLS.
+
+4. Copiá `.env.example` a `.env.local`:
 
 ```dotenv
 VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=tu_publishable_key
 ```
 
-4. Reiniciá `npm run dev`. Dentro de una sala aparecerá `EN VIVO` cuando esté usando Supabase.
+5. Reiniciá `npm run dev`. Dentro de una sala aparece **EN VIVO** cuando se usa Supabase.
 
-La migración crea tablas, índices, políticas RLS, mazos persistentes, 60 consignas activas, eventos, RPCs autoritativas y las políticas de Realtime privado. No contiene credenciales ni tareas de expiración: cada RPC valida `expires_at` al ejecutarse.
+### Seguridad antes de publicar
 
-### Hito 4 — Resiliencia
+- Mantené **Anonymous sign-ins** habilitado.
+- Mantené RLS habilitado: no elimines políticas ni uses la service role en el cliente.
+- El frontend usa exclusivamente `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`.
+- Nunca cargues `service_role`, una secret key, contraseña de PostgreSQL, token administrativo ni ninguna otra credencial privada en Vercel, en `.env.local` del frontend o en el repositorio.
+- En **Authentication → URL Configuration**, configurá el **Site URL** con tu URL de producción de Vercel, por ejemplo `https://contramano.vercel.app`. Agregá esa misma URL en **Redirect URLs**. Si necesitás probar previews de Vercel, agregá sólo los dominios concretos que uses.
+- Como mejora futura, evaluá habilitar CAPTCHA para Auth anónimo. No bloquea este MVP.
 
-La migración `202608130004_add_resilience.sql` añade un heartbeat persistido por jugador, reconciliación idempotente y metadatos de pausa. Presence sigue siendo visual: las decisiones de pausa, reanudación y transferencia se hacen con `last_seen_at` en servidor. Con menos de tres personas conectadas la ronda se pausa y congela el tiempo; al volver a tres, sólo el host puede reanudar. Si el host no aparece durante 45 segundos y hay tres personas conectadas, se asigna el host al jugador conectado más antiguo y se registra `host_transferred`.
+Checklist rápido de RLS:
 
-El debate y la votación se concilian desde cualquier miembro al vencer sus timestamps del servidor. El host conserva el único permiso para adelantar la apertura de votación. Los votos usan una restricción única y una inserción idempotente, por lo que un doble clic o dos pestañas no otorgan puntos dos veces.
+1. Creá una sala en una sesión.
+2. Abrí el link en incógnito: debe aparecer el formulario de apodo, nunca datos internos o el snapshot de la sala.
+3. Uní esa segunda sesión y verificá que recién entonces ve el lobby.
+4. Abrí otra sala en una tercera sesión: no debe poder leer ni modificar la primera.
+5. Confirmá que un no-host no ve controles de host y un no-jurado no puede votar.
 
-La revancha ahora genera una sala nueva con código y link nuevos, puntajes en cero y sólo quienes sigan conectados. La sala anterior conserva sus rondas como historial y muestra el acceso a la nueva mesa.
+## Publicar manualmente en Vercel
 
-### Catálogo editorial
+Vercel reconoce Vite sin dependencias adicionales. El repositorio incluye `vercel.json` para que abrir directamente una URL como `/sala/ABCDEFGH` entregue la aplicación en lugar de un 404.
 
-Cada modo incluye **60 cartas activas y 20 de reserva**: cuatro activas para cada una de estas 15 situaciones: Asado, Mate, Salidas, Música, Amistades, Redes, Facultad, Laburo, Viajes, Convivencia, Plata, Juegos, Fútbol, Planes y Hábitos. Cada consigna propone una decisión, un límite o una responsabilidad concreta con dos posturas defendibles; no se usan observaciones vagas, conclusiones cerradas ni frases incompletas. El mazo mantiene sus reglas actuales de no repetición, categorías consecutivas y revancha. Las migraciones editoriales sólo actualizan textos y marcan cartas previas fuera de la selección como `reserve`; no eliminan consignas que puedan estar en una ronda histórica ni modifican mazos ya persistidos.
+1. Entrá a [Vercel](https://vercel.com/) con tu cuenta.
+2. Elegí **Add New → Project** e importá `Santiagoecrespo/Contramano`.
+3. Verificá estos valores en la pantalla de configuración:
+   - Framework Preset: **Vite**
+   - Build Command: `npm run build`
+   - Output Directory: `dist`
+   - Install Command: `npm install` (o `npm ci`)
+4. En **Environment Variables**, agregá para Production y Preview:
 
-Para probarlo, abrí la sala en perfiles o navegadores separados. El host inicia con tres personas; al terminar el debate su cliente intenta abrir la votación y la RPC comprueba el reloj del servidor. Los botones del host quedan como respaldo, sin permitir adelantar esos tiempos. Sólo votan jurados; se cierra automáticamente si votan todos o el host puede cerrarla al vencer los 30 segundos. Si el host se desconecta, la sala queda esperando su regreso, sin transferencia automática.
+```dotenv
+VITE_SUPABASE_URL=https://tu-proyecto.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=tu_publishable_key
+```
 
-### Prueba manual recomendada
+5. Revisá que no haya ninguna variable privada: no agregues `service_role`, secret key ni claves de PostgreSQL.
+6. Hacé clic en **Deploy**.
+7. Copiá la URL pública resultante y cargala en Supabase como Site URL y Redirect URL, según la sección anterior.
+8. Creá una sala desde la URL de Vercel y verificá que el QR y WhatsApp contengan exactamente esa URL pública con `/sala/CODIGO`.
 
-Después de ejecutar las migraciones correctivas, abrí una ventana normal y dos incógnitas (o tres navegadores): creá una sala con el host y abrí el link desde las otras dos sesiones. Cada invitado debe ver primero el formulario **Unirme a la mesa**, sin errores de snapshot; ingresá apodos distintos y verificá que el lobby pase a tres personas. Iniciá la partida, comprobá que hay un jurado y usá **Abrir votación ahora** antes de que llegue a cero: sólo el host debe verlo y todos deben pasar a votar. También esperá el fin natural del contador en otra ronda. Si algo falla, revisá la consola: en desarrollo cada RPC registra su nombre y el error de Supabase una sola vez, mientras la interfaz muestra un mensaje entendible.
+El QR y WhatsApp se construyen desde `window.location.origin`, así que en producción conservan automáticamente el dominio de Vercel y el código de sala.
 
-Para validar Hito 4 con esas mismas tres sesiones:
+## Métricas mínimas
 
-1. Recargá cada sesión durante lobby, debate, voto, resultado y final: el apodo, rol, puntaje y ronda deben volver desde el snapshot.
-2. Durante el debate, cerrá dos sesiones. En menos de 20 segundos la tercera debe ver **“La partida está en pausa: faltan jugadores.”** y el contador debe congelarse. Reabrí una sesión: sólo el host puede pulsar **Reanudar partida**.
-3. Cerrá la sesión del host y mantené tres personas conectadas. Después de 45 segundos, un jugador conectado pasa a ser anfitrión y puede reanudar o continuar.
-4. Dejá vencer un debate y una votación sin tocar los controles: cualquier sesión abierta reconcilia cada transición una sola vez. Hacé doble clic en el voto del jurado: debe quedar un solo voto.
-5. Terminá las cinco rondas y pedí revancha: se abre una URL con otro código, puntajes en cero y la mesa original mantiene el ranking anterior.
+Las métricas viven en `public.events`; no se agrega una plataforma externa ni se guarda información personal para este fin. Hito 5 registra `game_started`, `game_finished` y `whatsapp_share_clicked`. También quedan disponibles `room_created`, `player_joined`, `round_started`, `round_finished`, `rematch_started`, `prompt_skipped`, `host_transferred` y `game_paused`.
 
-## Decisión acordada para `start_round()`
+### Eventos por día
 
-Cuando la cantidad de jugadores activos sea impar, una postura tendrá un integrante extra. La primera vez que ocurra esta situación se elige aleatoriamente qué postura recibe ese integrante; en la siguiente ronda que también tenga una cantidad impar de jugadores activos, se asigna la postura contraria. Las rondas con cantidad par de jugadores no modifican `last_odd_extra_side`.
+```sql
+select
+  created_at::date as fecha,
+  name as evento,
+  count(*) as cantidad
+from public.events
+where name in (
+  'room_created',
+  'player_joined',
+  'game_started',
+  'round_started',
+  'round_finished',
+  'game_finished',
+  'rematch_started',
+  'whatsapp_share_clicked',
+  'prompt_skipped',
+  'host_transferred',
+  'game_paused'
+)
+group by 1, 2
+order by 1 desc, 2;
+```
 
-En el mock local del Hito 2 ya se aplica esta misma regla, después de separar al jurado: `start_round()` rota jurados para evitar repeticiones y equilibrar turnos, asigna posturas aleatoriamente entre quienes debaten, mantiene equipos iguales cuando la cantidad es par, limita la diferencia a una persona cuando es impar, minimiza repeticiones consecutivas y activa recién en la siguiente ronda a quienes entran durante una partida.
+### Embudo: primera ronda, cinco rondas y revancha
+
+```sql
+with salas_creadas as (
+  select room_id, min(created_at) as creada_en
+  from public.events
+  where name = 'room_created'
+  group by room_id
+),
+estado as (
+  select
+    sc.room_id,
+    exists (
+      select 1 from public.events e
+      where e.room_id = sc.room_id and e.name = 'round_started'
+    ) as llego_a_primera_ronda,
+    exists (
+      select 1 from public.events e
+      where e.room_id = sc.room_id and e.name = 'game_finished'
+    ) as completo_cinco_rondas,
+    exists (
+      select 1 from public.events e
+      where e.room_id = sc.room_id and e.name = 'rematch_started'
+    ) as inicio_revancha
+  from salas_creadas sc
+)
+select
+  count(*) as salas_creadas,
+  round(100.0 * count(*) filter (where llego_a_primera_ronda) / nullif(count(*), 0), 1) as pct_primera_ronda,
+  round(100.0 * count(*) filter (where completo_cinco_rondas) / nullif(count(*), 0), 1) as pct_completa_cinco,
+  round(100.0 * count(*) filter (where inicio_revancha) / nullif(count(*), 0), 1) as pct_revancha
+from estado;
+```
+
+### Promedio de jugadores por sala y modo elegido
+
+```sql
+select
+  r.intensity as modo,
+  count(*) as salas,
+  round(avg(jugadores.cantidad), 2) as promedio_jugadores
+from public.rooms r
+join lateral (
+  select count(*)::numeric as cantidad
+  from public.players p
+  where p.room_id = r.id
+) jugadores on true
+group by r.intensity
+order by r.intensity;
+```
+
+### Consignas más saltadas
+
+> Esta consulta incluye los saltos registrados luego de aplicar Hito 5; los anteriores no tenían `prompt_id` en el evento.
+
+```sql
+select
+  p.category,
+  p.text as consigna,
+  count(*) as veces_saltada
+from public.events e
+join public.prompts p on p.id = e.metadata ->> 'prompt_id'
+where e.name = 'prompt_skipped'
+group by p.category, p.text
+order by veces_saltada desc, p.category
+limit 20;
+```
+
+### Compartidos por WhatsApp
+
+```sql
+select
+  created_at::date as fecha,
+  count(*) as clics_whatsapp
+from public.events
+where name = 'whatsapp_share_clicked'
+group by 1
+order by 1 desc;
+```
+
+## Guía de prueba pública
+
+Probalo con dos o tres grupos reales, idealmente desde celulares.
+
+1. El host abre la URL pública de Vercel desde su celular y crea una sala.
+2. Comparte el QR o **Compartir por WhatsApp**.
+3. Dos o más personas se unen desde sus propios celulares.
+4. Juegan las cinco rondas.
+5. Anotá:
+   - si entienden qué hacer sin explicación;
+   - si completan las cinco rondas;
+   - si piden revancha;
+   - qué consignas generan discusión, risas, confusión o cambios;
+   - problemas de conexión, pausa o reconexión.
+6. Después de cada grupo, ejecutá las consultas de métricas.
+
+### Checklist de lanzamiento
+
+- [ ] Variables públicas de Supabase cargadas en Vercel.
+- [ ] URL de producción configurada en Supabase Auth.
+- [ ] Auth anónimo y RLS habilitados.
+- [ ] QR probado en Android y iPhone desde la URL pública.
+- [ ] WhatsApp conserva la URL pública y el código de la sala.
+- [ ] Tres sesiones comparten lobby, debate y votación.
+- [ ] Recarga y reconexión recuperan la partida.
+- [ ] No hay errores críticos en la consola del navegador.
+- [ ] RLS entre dos salas fue verificado.
+- [ ] Interfaz revisada a 375 px, 768 px y desktop.
+- [ ] Métricas de prueba revisadas en `events`.
+
+## Qué falta para declararlo públicamente lanzado
+
+A nivel código, el MVP queda listo al completar el checklist anterior y hacer una prueba real de cinco rondas. Antes de compartirlo ampliamente, falta que vos ejecutes el deploy manual, configures la URL de Vercel en Supabase y confirmes una prueba en celulares reales. CAPTCHA para Auth anónimo, monitoreo de errores y analítica más avanzada son mejoras posteriores, no requisitos de este primer lanzamiento.

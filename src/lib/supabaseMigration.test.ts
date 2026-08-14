@@ -10,6 +10,7 @@ const editorialCatalogMigration = readFileSync(resolve(process.cwd(), 'supabase/
 const editorialTighteningMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130003_tighten_prompt_conflicts.sql'), 'utf8')
 const resilienceMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130004_add_resilience.sql'), 'utf8')
 const joinRoomGrantFix = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130005_fix_join_room_grant.sql'), 'utf8')
+const launchEventsMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130006_add_launch_events.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -92,5 +93,17 @@ describe('migraciones Supabase de rondas', () => {
     expect(resilienceMigration).toContain('public.join_room(text,text)')
     expect(joinRoomGrantFix).toContain(grant)
     expect(resilienceMigration).not.toContain('public.join_room(text),')
+  })
+
+  it('registra las métricas de lanzamiento sin abrir RLS ni guardar datos personales', () => {
+    expect(launchEventsMigration).toContain("'game_started'")
+    expect(launchEventsMigration).toContain("'game_finished'")
+    expect(launchEventsMigration).toContain("'whatsapp_share_clicked'")
+    expect(launchEventsMigration).toContain('create or replace function public.track_event')
+    expect(launchEventsMigration).toContain("jsonb_build_object('prompt_id',skipped_prompt)")
+    expect(launchEventsMigration).toContain('perform public.assert_live_room(rid)')
+    expect(launchEventsMigration).toContain('grant execute on function public.start_game(text),public.start_round(text),public.track_event(text,text) to authenticated;')
+    expect(launchEventsMigration).not.toMatch(/disable row level security|drop policy|service_role/i)
+    expect(rootMigration).toContain('Hito 5 base installation')
   })
 })

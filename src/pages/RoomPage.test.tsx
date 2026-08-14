@@ -7,7 +7,7 @@ const service = vi.hoisted(() => ({
   addDemo: vi.fn(), changeIntensity: vi.fn(), closeVoting: vi.fn(), confirmChange: vi.fn(), heartbeat: vi.fn(),
   forgetLocalPlayer: vi.fn(), getRoom: vi.fn(), joinRoom: vi.fn(), localPlayerId: vi.fn(),
   nextRound: vi.fn(), openVoting: vi.fn(), pause: vi.fn(), prepareRoomVisit: vi.fn(), reconcileRoom: vi.fn(), rematch: vi.fn(),
-  requestChange: vi.fn(), resume: vi.fn(), resumeRoomMember: vi.fn(), roomAccessError: vi.fn(), startGame: vi.fn(), subscribeRoom: vi.fn(), vote: vi.fn(),
+  requestChange: vi.fn(), resume: vi.fn(), resumeRoomMember: vi.fn(), roomAccessError: vi.fn(), startGame: vi.fn(), subscribeRoom: vi.fn(), trackWhatsAppShare: vi.fn(), vote: vi.fn(),
 }))
 
 vi.mock('../lib/gameService', () => ({ ...service, isRealtimeMode: true }))
@@ -161,5 +161,12 @@ describe('acceso de invitados a una sala realtime', () => {
     expect(screen.getByText(/reloj.*00:42/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /reanudar partida/i })).not.toBeInTheDocument()
     expect(screen.getByText('Esperando al anfitrión para reanudar.')).toBeInTheDocument()
+  })
+  it('aclara que el QR local no funciona desde otro celular', async () => {
+    service.localPlayerId.mockReturnValue('host')
+    service.getRoom.mockResolvedValue(room)
+    renderRoom()
+
+    expect(await screen.findByText(/estás en local/i)).toBeInTheDocument()
   })
 })

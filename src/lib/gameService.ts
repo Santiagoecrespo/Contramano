@@ -33,6 +33,13 @@ async function rpc(name: string, params: Record<string, unknown>): Promise<MockR
   return unwrap(data)
 }
 
+export async function trackWhatsAppShare(code: string): Promise<void> {
+  if (!isRealtimeMode || !supabase) return
+  await ensureAnonymousSession()
+  const { error } = await supabase.rpc('track_event', { p_room_id: code, p_name: 'whatsapp_share_clicked' })
+  if (error && import.meta.env.DEV) console.warn('[Contramano telemetry] whatsapp_share_clicked', error)
+}
+
 export async function prepareRoomVisit(): Promise<void> {
   if (isRealtimeMode) await ensureAnonymousSession()
 }
