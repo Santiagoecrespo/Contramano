@@ -715,7 +715,7 @@ grant execute on function public.heartbeat(text),public.reconcile_room(text),pub
 grant execute on function public.advance_to_voting(text),public.cast_vote(text,text),public.close_voting(text),public.pause_game(text),public.resume_game(text),public.rematch(text),public.join_room(text,text),public.get_room_snapshot(text) to authenticated;
 
 -- Hito 5 base installation: keep this in sync with 202608130006_add_launch_events.sql.
-+-- Hito 5: minimal launch metrics for existing Contramano projects.
+-- Hito 5: minimal launch metrics for existing Contramano projects.
 -- Safe after 202608130005_fix_join_room_grant.sql. It preserves all data,
 -- keeps RLS intact and only replaces RPCs to record aggregate game events.
 
@@ -764,7 +764,6 @@ begin
 end $$;
 
 grant execute on function public.start_game(text),public.start_round(text),public.track_event(text,text) to authenticated;
-+
 
 create or replace function public.confirm_prompt_change(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
 declare rid uuid:=public.resolve_room(p_room_id); r public.rooms; current_round public.rounds; next_prompt text; skipped_prompt text;

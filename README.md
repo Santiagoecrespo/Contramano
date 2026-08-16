@@ -1,11 +1,14 @@
-+# Contramano
+# Contramano
 
 Juego web para juntadas: alguien crea una mesa, comparte un link o QR, la gente entra con apodo y juegan cinco rondas de debate con jurado rotativo. No es una app instalable: funciona desde el navegador del celular.
 
 ## Qué hace hoy
 
 - Salas de 3 a 8 personas, con código de 8 caracteres no ambiguos.
-- Cinco rondas por partida, mazos separados para **Tranqui** y **Modo Bardo**.
+- Cinco rondas por partida y mazos independientes para **Tranqui** y **Modo Bardo**.
+- Catálogo Bardo V2: 100 consignas activas y 30 de reserva, repartidas entre siete categorías de conflicto cotidiano.
+- Las cartas Bardo anteriores permanecen archivadas para que el historial de rondas siga siendo fiel, pero no se reparten de nuevo.
+- El mazo evita repetir la categoría consecutiva cuando hay alternativas, demora las cinco cartas recientes y usa reserva antes de repetir.
 - Jurado rotativo: una persona con 3–5 jugadores y dos con 6–8.
 - Equipos A/B equilibrados entre quienes debaten; el jurado vota en privado.
 - Resultado, desempate aleatorio informado, puntajes y ranking final.
@@ -44,19 +47,27 @@ La app usa autenticación anónima, RLS, RPCs autoritativas, Broadcast privado y
 2. En **Authentication → Providers**, activá **Anonymous sign-ins**.
 3. Ejecutá las migraciones en **SQL Editor**.
 
-Para una instalación nueva, ejecutá una sola vez el archivo completo [202608120001_realtime_multiplayer.sql](supabase/migrations/202608120001_realtime_multiplayer.sql).
+Para una instalación nueva, ejecutá en este orden:
 
-Si ya habías ejecutado una versión anterior del archivo base, corré en orden:
+1. [202608120001_realtime_multiplayer.sql](supabase/migrations/202608120001_realtime_multiplayer.sql)
+2. [202608120002_fix_start_new_round_jurors.sql](supabase/migrations/202608120002_fix_start_new_round_jurors.sql)
+3. [202608130001_allow_host_early_voting.sql](supabase/migrations/202608130001_allow_host_early_voting.sql)
+4. [202608130002_expand_editorial_prompt_catalog.sql](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql)
+5. [202608130003_tighten_prompt_conflicts.sql](supabase/migrations/202608130003_tighten_prompt_conflicts.sql)
+6. [202608130004_add_resilience.sql](supabase/migrations/202608130004_add_resilience.sql)
+7. [202608130005_fix_join_room_grant.sql](supabase/migrations/202608130005_fix_join_room_grant.sql)
+8. [202608130006_add_launch_events.sql](supabase/migrations/202608130006_add_launch_events.sql)
+9. [202608160001_contramano_v2_content_and_decks.sql](supabase/migrations/202608160001_contramano_v2_content_and_decks.sql)
 
-1. [202608120002_fix_start_new_round_jurors.sql](supabase/migrations/202608120002_fix_start_new_round_jurors.sql)
-2. [202608130001_allow_host_early_voting.sql](supabase/migrations/202608130001_allow_host_early_voting.sql)
-3. [202608130002_expand_editorial_prompt_catalog.sql](supabase/migrations/202608130002_expand_editorial_prompt_catalog.sql)
-4. [202608130003_tighten_prompt_conflicts.sql](supabase/migrations/202608130003_tighten_prompt_conflicts.sql)
-5. [202608130004_add_resilience.sql](supabase/migrations/202608130004_add_resilience.sql)
-6. [202608130005_fix_join_room_grant.sql](supabase/migrations/202608130005_fix_join_room_grant.sql) — sólo es necesaria si tu versión de Hito 4 mostró el error de firma de `join_room`.
-7. [202608130006_add_launch_events.sql](supabase/migrations/202608130006_add_launch_events.sql)
+Si tu proyecto ya tiene Hitos 1–5, ejecutá solamente [202608160001_contramano_v2_content_and_decks.sql](supabase/migrations/202608160001_contramano_v2_content_and_decks.sql). Es segura sobre la base existente: agrega metadatos del catálogo, archiva el Bardo anterior sin borrar datos y reemplaza el reparto de cartas sin debilitar RLS.
 
-La migración de Hito 5 sólo agrega eventos de lanzamiento y metadatos del salto de consigna. No elimina tablas, datos ni debilita RLS.
+### Catálogo y reparto V2
+
+- **Tranqui:** 60 activas + 20 de reserva, sin cambios de alcance.
+- **Bardo:** 100 activas + 30 de reserva. Las siete categorías son: Pareja y celos; Chamuyo, citas y límites; Amistades y códigos; WhatsApp, Instagram, privacidad y redes; Gym, imagen, ropa y validación; Salidas, previa, boliche y plata; y Convivencia, facultad, trabajo, viajes y vida adulta.
+- Las 130 nuevas cartas Bardo tienen IDs `v2-…`. Las anteriores pasan a `archived`: no se modifica su texto, sus lados ni las rondas históricas que las usaron.
+- El catálogo V2 contiene 76 consignas neutrales, 27 dirigidas a hombres y 27 dirigidas a mujeres. No incluye ataques por raza, religión, nacionalidad, orientación sexual, discapacidad ni política partidaria.
+- Para cada intensidad, el mazo usa primero activas, después reserva y sólo entonces vuelve a mezclar. Evita las cinco cartas recientes —incluida una saltada— y evita una categoría consecutiva si existe otra opción. En una revancha, esas cinco últimas cartas quedan postergadas al inicio del nuevo mazo.
 
 4. Copiá `.env.example` a `.env.local`:
 

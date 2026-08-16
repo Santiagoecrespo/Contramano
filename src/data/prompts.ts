@@ -1,7 +1,7 @@
-import type { Intensity, PromptPreview, PromptStatus } from '../types/game'
+import type { Intensity, PromptAudience, PromptPreview, PromptStatus } from '../types/game'
 
-type PromptSeed = [string, string, string, string, string, PromptStatus?]
-const makePrompts = (intensity: Intensity, seeds: PromptSeed[]): PromptPreview[] => seeds.map(([id, category, text, sideA, sideB, status = 'active']) => ({ id, category, text, sideA, sideB, status, intensity }))
+type PromptSeed = [string, string, string, string, string, PromptStatus?, PromptAudience?]
+const makePrompts = (intensity: Intensity, seeds: PromptSeed[]): PromptPreview[] => seeds.map(([id, category, text, sideA, sideB, status = 'active', audienceType = 'neutral']) => ({ id, category, text, sideA, sideB, status, audienceType, intensity }))
 
 export const promptPreviews: PromptPreview[] = [
   ...makePrompts('tranqui', [
@@ -167,10 +167,156 @@ export const promptPreviews: PromptPreview[] = [
     ['salida-ubicacion', 'Salidas', 'Mandar “estoy llegando” sin ubicación no informa nada.', 'No informa', 'Alcanza', 'reserve'],
     ['musica-vergüenza', 'Música', 'Una canción vergonzosa se canta más fuerte si todos la saben.', 'Más fuerte', 'Se evita', 'reserve'],
     ['amistad-planes', 'Amistades', 'El amigo que organiza todo gana derecho a quejarse un poco.', 'Gana derecho', 'No se queja', 'reserve'],
+  ]).map((prompt) => ({ ...prompt, status: 'archived' as const })),
+  ...makePrompts('bardo', [
+    // Pareja y celos — 14 activas, 4 de reserva.
+    ['v2-pareja-ubicacion', 'Pareja y celos', 'Tener ubicación compartida con tu pareja es control.', 'Es control', 'Es cuidado'],
+    ['v2-pareja-like-ex', 'Pareja y celos', 'Dar like a fotos de tu ex teniendo pareja es buscar lío.', 'Busca lío', 'No significa nada'],
+    ['v2-pareja-clave', 'Pareja y celos', 'Saber la clave del celular no prueba confianza.', 'No prueba nada', 'Es confianza'],
+    ['v2-pareja-fotos-ex', 'Pareja y celos', 'Guardar fotos con tu ex no tiene nada de inocente.', 'No es inocente', 'Es pasado'],
+    ['v2-pareja-plan-cancelado', 'Pareja y celos', 'Cancelar un plan de pareja por una salida cae mal con razón.', 'Cae mal con razón', 'Puede pasar'],
+    ['v2-pareja-close-friends', 'Pareja y celos', 'Ocultar historias a tu pareja es peor que no subirlas.', 'Es peor', 'Es privado'],
+    ['v2-pareja-ex-cumple', 'Pareja y celos', 'Saludar a tu ex a las doce de la noche no es de amigos.', 'No es de amigos', 'Es educación'],
+    ['v2-pareja-hombre-exes', 'Pareja y celos', 'Un hombre que sigue a todas sus ex no cerró nada.', 'No cerró nada', 'No significa eso', 'active', 'dirigida_a_hombres'],
+    ['v2-pareja-hombre-historias', 'Pareja y celos', 'Un hombre que responde historias ajenas a escondidas busca problemas.', 'Busca problemas', 'Es inocente', 'active', 'dirigida_a_hombres'],
+    ['v2-pareja-hombre-esconde', 'Pareja y celos', 'Un hombre que nunca muestra a su novia en redes la está escondiendo.', 'La está escondiendo', 'Cuida su privacidad', 'active', 'dirigida_a_hombres'],
+    ['v2-pareja-hombre-intensa', 'Pareja y celos', 'Un hombre que dice “sos intensa” para zafar se hace el boludo.', 'Se hace el boludo', 'Pone un límite', 'active', 'dirigida_a_hombres'],
+    ['v2-pareja-mujer-aviso', 'Pareja y celos', 'Una mujer que sale sin avisar a su pareja no le debe explicaciones.', 'No le debe nada', 'Se conversa', 'active', 'dirigida_a_mujeres'],
+    ['v2-pareja-mujer-ex', 'Pareja y celos', 'Una mujer que habla todos los días con su ex no cerró esa historia.', 'No la cerró', 'Pueden ser amigos', 'active', 'dirigida_a_mujeres'],
+    ['v2-pareja-mujer-like-ex', 'Pareja y celos', 'Una mujer que le comenta todo a su ex está dejando una puerta abierta.', 'Deja una puerta', 'Es buena onda', 'active', 'dirigida_a_mujeres'],
+    ['v2-pareja-ultima-conexion', 'Pareja y celos', 'Mirar la última conexión de tu pareja te arruina solo.', 'Te arruina', 'Te aclara', 'reserve'],
+    ['v2-pareja-borrar-chat', 'Pareja y celos', 'Borrar un chat para evitar una pelea ya dice bastante.', 'Dice bastante', 'Evita un drama', 'reserve'],
+    ['v2-pareja-hombre-silencia', 'Pareja y celos', 'Un hombre que silencia a su pareja para salir busca que no le reclamen.', 'Busca zafar', 'Necesita aire', 'reserve', 'dirigida_a_hombres'],
+    ['v2-pareja-mujer-close-friends', 'Pareja y celos', 'Una mujer que deja a su ex en mejores amigos no cerró del todo.', 'No cerró del todo', 'No tiene relación', 'reserve', 'dirigida_a_mujeres'],
+
+    // Chamuyo, citas y límites — 14 activas, 4 de reserva.
+    ['v2-citas-no-serio', 'Chamuyo, citas y límites', 'Decir “no busco nada serio” y actuar como pareja es hacer perder tiempo.', 'Hace perder tiempo', 'Fue claro'],
+    ['v2-citas-ghosting', 'Chamuyo, citas y límites', 'El ghosting es más honesto que inventar excusas.', 'Más honesto', 'Más cobarde'],
+    ['v2-citas-exclusividad', 'Chamuyo, citas y límites', 'Pedir exclusividad sin hablarla es jugar sucio.', 'Es jugar sucio', 'Se sobreentiende'],
+    ['v2-citas-cancela', 'Chamuyo, citas y límites', 'Cancelar una cita dos horas antes merece una explicación.', 'Merece explicación', 'No la debe'],
+    ['v2-citas-primera-cuenta', 'Chamuyo, citas y límites', 'Pagar todo en la primera cita también puede ser chamuyo.', 'Puede ser chamuyo', 'Es un gesto'],
+    ['v2-citas-doble-chat', 'Chamuyo, citas y límites', 'Hablar con cinco personas a la vez no es estar disponible.', 'No es estar disponible', 'Es conocer gente'],
+    ['v2-citas-sin-responder', 'Chamuyo, citas y límites', 'Dejar de responder después de una cita ya es una respuesta.', 'Ya respondió', 'Se puede retomar'],
+    ['v2-citas-quimica', 'Chamuyo, citas y límites', 'Decir “no sentí química” por WhatsApp es mejor que desaparecer.', 'Es mejor', 'Es de frío'],
+    ['v2-citas-hombre-madrugada', 'Chamuyo, citas y límites', 'Un hombre que responde sólo de madrugada no busca conocerte.', 'No busca nada', 'Tiene sus tiempos', 'active', 'dirigida_a_hombres'],
+    ['v2-citas-hombre-fluir', 'Chamuyo, citas y límites', 'Un hombre que dice “fluimos” quiere no hacerse cargo.', 'No se hace cargo', 'Va tranquilo', 'active', 'dirigida_a_hombres'],
+    ['v2-citas-hombre-viernes', 'Chamuyo, citas y límites', 'Un hombre que propone planes sólo los viernes deja claro el plan.', 'Lo deja claro', 'Es coincidencia', 'active', 'dirigida_a_hombres'],
+    ['v2-citas-mujer-vemos', 'Chamuyo, citas y límites', 'Una mujer que dice “vemos” hasta el mismo día ya dijo que no.', 'Ya dijo que no', 'Todavía decide', 'active', 'dirigida_a_mujeres'],
+    ['v2-citas-mujer-celos', 'Chamuyo, citas y límites', 'Una mujer que no quiere nada pero cela está pidiendo exclusividad.', 'La está pidiendo', 'Sólo le importa', 'active', 'dirigida_a_mujeres'],
+    ['v2-citas-mujer-plan', 'Chamuyo, citas y límites', 'Una mujer que acepta planes y nunca propone uno no tiene tanto interés.', 'No tiene interés', 'Es su forma', 'active', 'dirigida_a_mujeres'],
+    ['v2-citas-segunda', 'Chamuyo, citas y límites', 'No proponer una segunda cita también es una decisión.', 'Ya decidió', 'No necesariamente', 'reserve'],
+    ['v2-citas-mensaje-largo', 'Chamuyo, citas y límites', 'Cortar por mensaje largo es mejor que estirar algo muerto.', 'Es mejor', 'Es de cobarde', 'reserve'],
+    ['v2-citas-hombre-visto', 'Chamuyo, citas y límites', 'Un hombre que deja en visto y vuelve con un meme está tanteando.', 'Está tanteando', 'Es su humor', 'reserve', 'dirigida_a_hombres'],
+    ['v2-citas-mujer-reserva', 'Chamuyo, citas y límites', 'Una mujer que sólo acepta planes de último momento se guarda opciones.', 'Se guarda opciones', 'Es espontánea', 'reserve', 'dirigida_a_mujeres'],
+
+    // Amistades y códigos — 14 activas, 4 de reserva.
+    ['v2-amigos-encara-gusto', 'Amistades y códigos', 'Si un amigo encara a alguien que sabés que te gusta, rompió un código.', 'Rompió un código', 'Nadie es de nadie'],
+    ['v2-amigos-capturas', 'Amistades y códigos', 'Guardar capturas de una pelea para mostrarlas después es jugar sucio.', 'Es jugar sucio', 'Es cuidarse'],
+    ['v2-amigos-secretos', 'Amistades y códigos', 'Contar un secreto al grupo porque “ya se sabía” es traicionar.', 'Es traicionar', 'No era secreto'],
+    ['v2-amigos-pareja', 'Amistades y códigos', 'Desaparecer por una pareja nueva merece cargada del grupo.', 'Merece cargada', 'Es normal'],
+    ['v2-amigos-cumple', 'Amistades y códigos', 'Olvidarte el cumpleaños de un amigo pide más que un sticker.', 'Pide más', 'Con eso alcanza'],
+    ['v2-amigos-prestamo', 'Amistades y códigos', 'Un amigo que sólo aparece para pedir favores no es tan amigo.', 'No es tan amigo', 'Pasa una mala'],
+    ['v2-amigos-defender', 'Amistades y códigos', 'No defender a tu amigo cuando lo bardean también es tomar postura.', 'También cuenta', 'No te metas'],
+    ['v2-amigos-grupo-vacaciones', 'Amistades y códigos', 'Bajarte de un viaje grupal a último momento deja al grupo pagando.', 'Deja pagando', 'Puede pasar'],
+    ['v2-amigos-invitado', 'Amistades y códigos', 'Llevar a alguien nuevo sin avisar no es un detalle.', 'No es detalle', 'No cambia nada'],
+    ['v2-amigos-hombre-canchero', 'Amistades y códigos', 'Un hombre que se hace el canchero con todas las amigas busca validación.', 'Busca validación', 'Es sociable', 'active', 'dirigida_a_hombres'],
+    ['v2-amigos-hombre-presta', 'Amistades y códigos', 'Un hombre que promete ayudar y desaparece deja al grupo pagando.', 'Deja pagando', 'No pudo', 'active', 'dirigida_a_hombres'],
+    ['v2-amigos-mujer-ex-amigo', 'Amistades y códigos', 'Una mujer que le escribe al mejor amigo de su ex cruza un código.', 'Cruza un código', 'Es libre', 'active', 'dirigida_a_mujeres'],
+    ['v2-amigos-mujer-cumple', 'Amistades y códigos', 'Una mujer que no invita a una amiga por celos del grupo se pasa.', 'Se pasa', 'Elige su fiesta', 'active', 'dirigida_a_mujeres'],
+    ['v2-amigos-mujer-secreto', 'Amistades y códigos', 'Una mujer que cuenta un secreto “por preocupación” igual lo contó.', 'Igual lo contó', 'Era necesario', 'active', 'dirigida_a_mujeres'],
+    ['v2-amigos-audio', 'Amistades y códigos', 'Mandar un audio de diez minutos al grupo es secuestrar la charla.', 'La secuestra', 'Se escucha igual', 'reserve'],
+    ['v2-amigos-cancelar', 'Amistades y códigos', 'Cancelar tres veces seguidas te baja de prioridad para el próximo plan.', 'Te baja prioridad', 'No es para tanto', 'reserve'],
+    ['v2-amigos-hombre-revancha', 'Amistades y códigos', 'Un hombre que se enoja por perder no sabe jugar con amigos.', 'No sabe jugar', 'Es competitivo', 'reserve', 'dirigida_a_hombres'],
+    ['v2-amigos-mujer-grupo', 'Amistades y códigos', 'Una mujer que silencia al grupo y pide resumen no puede reclamar.', 'No puede reclamar', 'Puede pedirlo', 'reserve', 'dirigida_a_mujeres'],
+
+    // WhatsApp, Instagram, privacidad y redes — 15 activas, 5 de reserva.
+    ['v2-redes-indirectas', 'WhatsApp, Instagram, privacidad y redes', 'Tirar indirectas por historias es no animarse a hablar.', 'No se anima', 'Es descargarse'],
+    ['v2-redes-visto', 'WhatsApp, Instagram, privacidad y redes', 'Clavar visto después de proponer un plan es cancelar sin decirlo.', 'Es cancelar', 'No cuenta'],
+    ['v2-redes-historia-mensaje', 'WhatsApp, Instagram, privacidad y redes', 'Mirar quién vio tu historia antes de responder mensajes es jugar a dos puntas.', 'Es jugar', 'Es normal'],
+    ['v2-redes-cuenta-secundaria', 'WhatsApp, Instagram, privacidad y redes', 'Tener una cuenta secundaria para stalkear gente es una red flag.', 'Es red flag', 'Es curiosidad'],
+    ['v2-redes-ubicacion', 'WhatsApp, Instagram, privacidad y redes', 'Mandar ubicación en vivo sin que te la pidan es invadir.', 'Es invadir', 'Es cuidar'],
+    ['v2-redes-captura', 'WhatsApp, Instagram, privacidad y redes', 'Sacar captura de un chat sin avisar habilita a usarla después.', 'La habilita', 'Es privado'],
+    ['v2-redes-close-friends', 'WhatsApp, Instagram, privacidad y redes', 'Sacar a alguien de mejores amigos también es un mensaje.', 'Es un mensaje', 'No significa nada'],
+    ['v2-redes-comentario', 'WhatsApp, Instagram, privacidad y redes', 'Borrar un comentario para evitar preguntas genera más preguntas.', 'Genera más', 'Evita lío'],
+    ['v2-redes-hombre-follows', 'WhatsApp, Instagram, privacidad y redes', 'Un hombre que llena Instagram de follows nuevos busca que lo miren.', 'Busca miradas', 'Usa la red', 'active', 'dirigida_a_hombres'],
+    ['v2-redes-hombre-fuego', 'WhatsApp, Instagram, privacidad y redes', 'Un hombre que responde historias sólo con fuego está chamuyando.', 'Está chamuyando', 'Es un emoji', 'active', 'dirigida_a_hombres'],
+    ['v2-redes-hombre-comentario', 'WhatsApp, Instagram, privacidad y redes', 'Un hombre que comenta fotos ajenas teniendo pareja busca atención.', 'Busca atención', 'Es buena onda', 'active', 'dirigida_a_hombres'],
+    ['v2-redes-mujer-historia', 'WhatsApp, Instagram, privacidad y redes', 'Una mujer que sube una historia sólo para que le respondan busca atención.', 'Busca atención', 'Comparte igual', 'active', 'dirigida_a_mujeres'],
+    ['v2-redes-mujer-borrar', 'WhatsApp, Instagram, privacidad y redes', 'Una mujer que borra una historia por pocas vistas estaba esperando reacción.', 'Esperaba reacción', 'Cambió de idea', 'active', 'dirigida_a_mujeres'],
+    ['v2-redes-mujer-stalk', 'WhatsApp, Instagram, privacidad y redes', 'Una mujer que stalkea con cuenta falsa no está tan desinteresada.', 'No está distante', 'Es curiosidad', 'active', 'dirigida_a_mujeres'],
+    ['v2-redes-mujer-estado', 'WhatsApp, Instagram, privacidad y redes', 'Una mujer que sube indirectas y niega destinatario se hace la distraída.', 'Se hace la distraída', 'Se descarga', 'active', 'dirigida_a_mujeres'],
+    ['v2-redes-ultima-conexion', 'WhatsApp, Instagram, privacidad y redes', 'Ocultar la última conexión hace que todos la miren más.', 'La miran más', 'Da paz', 'reserve'],
+    ['v2-redes-responder-meme', 'WhatsApp, Instagram, privacidad y redes', 'Responder una discusión con un meme es esquivar el tema.', 'Lo esquiva', 'Baja tensión', 'reserve'],
+    ['v2-redes-foto-grupo', 'WhatsApp, Instagram, privacidad y redes', 'Subir una foto grupal sin preguntar no necesita permiso.', 'No necesita', 'Se pregunta', 'reserve'],
+    ['v2-redes-hombre-visto', 'WhatsApp, Instagram, privacidad y redes', 'Un hombre que ve todo y nunca responde quiere seguir ahí.', 'Quiere seguir', 'No le importa', 'reserve', 'dirigida_a_hombres'],
+    ['v2-redes-mujer-like', 'WhatsApp, Instagram, privacidad y redes', 'Una mujer que da likes selectivos sabe el mensaje que manda.', 'Sabe el mensaje', 'No calcula tanto', 'reserve', 'dirigida_a_mujeres'],
+
+    // Gym, imagen, ropa y validación — 14 activas, 4 de reserva.
+    ['v2-gym-perfume', 'Gym, imagen, ropa y validación', 'Ir al gym perfumado también es ir a mostrarse.', 'También es mostrarse', 'Es para uno'],
+    ['v2-gym-espejo', 'Gym, imagen, ropa y validación', 'Usar el espejo del gym más para fotos que para entrenar da cuenta.', 'Da cuenta', 'Es parte del gym'],
+    ['v2-gym-rutina-historia', 'Gym, imagen, ropa y validación', 'Subir cada rutina vuelve al gym una performance.', 'Lo vuelve show', 'Motiva a otros'],
+    ['v2-gym-consejo', 'Gym, imagen, ropa y validación', 'Dar consejos de gym sin que te los pidan es querer figurar.', 'Quiere figurar', 'Quiere ayudar'],
+    ['v2-gym-ropa', 'Gym, imagen, ropa y validación', 'Vestirse para levantar en el gym no tiene nada de malo.', 'No tiene nada malo', 'Desubica'],
+    ['v2-gym-progreso', 'Gym, imagen, ropa y validación', 'Mostrar un cambio físico pide validación aunque sea merecida.', 'Pide validación', 'Comparte progreso'],
+    ['v2-gym-ausencia', 'Gym, imagen, ropa y validación', 'Decir que vas al gym y no ir merece que te carguen.', 'Merece cargada', 'No es asunto ajeno'],
+    ['v2-gym-hombre-series', 'Gym, imagen, ropa y validación', 'Un hombre que graba cada serie quiere público.', 'Quiere público', 'Registra progreso', 'active', 'dirigida_a_hombres'],
+    ['v2-gym-hombre-musculosa', 'Gym, imagen, ropa y validación', 'Un hombre que se saca la remera para entrenar sabe que lo miran.', 'Sabe que lo miran', 'Está cómodo', 'active', 'dirigida_a_hombres'],
+    ['v2-gym-hombre-consejo', 'Gym, imagen, ropa y validación', 'Un hombre que corrige la técnica ajena sin permiso se agranda.', 'Se agranda', 'Está ayudando', 'active', 'dirigida_a_hombres'],
+    ['v2-gym-hombre-selfie', 'Gym, imagen, ropa y validación', 'Un hombre que sube selfie de gym todos los días se mide por likes.', 'Se mide por likes', 'Le gusta el progreso', 'active', 'dirigida_a_hombres'],
+    ['v2-gym-mujer-arregla', 'Gym, imagen, ropa y validación', 'Una mujer que se arregla para entrenar también quiere que la miren.', 'Quiere miradas', 'Se arregla para ella', 'active', 'dirigida_a_mujeres'],
+    ['v2-gym-mujer-historia', 'Gym, imagen, ropa y validación', 'Una mujer que filma toda su rutina está más para contenido que para gym.', 'Está para contenido', 'Comparte su proceso', 'active', 'dirigida_a_mujeres'],
+    ['v2-gym-mujer-ropa', 'Gym, imagen, ropa y validación', 'Una mujer que estrena outfit de gym espera que se note.', 'Espera que se note', 'Le gusta vestirse', 'active', 'dirigida_a_mujeres'],
+    ['v2-gym-auriculares', 'Gym, imagen, ropa y validación', 'Entrenar con auriculares es una forma válida de no socializar.', 'Es válida', 'Es cortante', 'reserve'],
+    ['v2-gym-foto-ajena', 'Gym, imagen, ropa y validación', 'Sacar fotos en el gym obliga a cuidar que no salga nadie atrás.', 'Obliga a cuidar', 'No es para tanto', 'reserve'],
+    ['v2-gym-hombre-peso', 'Gym, imagen, ropa y validación', 'Un hombre que avisa cuánto levanta antes de entrenar compite con todos.', 'Compite con todos', 'Comparte logro', 'reserve', 'dirigida_a_hombres'],
+    ['v2-gym-mujer-espejo', 'Gym, imagen, ropa y validación', 'Una mujer que tarda más en la foto que en la serie prioriza la foto.', 'Prioriza la foto', 'Es su descanso', 'reserve', 'dirigida_a_mujeres'],
+
+    // Salidas, previa, boliche y plata — 15 activas, 5 de reserva.
+    ['v2-salida-tarde-hielo', 'Salidas, previa, boliche y plata', 'Llegar una hora tarde a la previa obliga a poner para el hielo.', 'Le toca poner', 'No compensa'],
+    ['v2-salida-centavos', 'Salidas, previa, boliche y plata', 'Cobrar hasta el último peso después de una salida baja el ánimo.', 'Baja el ánimo', 'Es justo'],
+    ['v2-salida-cancela', 'Salidas, previa, boliche y plata', 'Cancelar el mismo día debería tener multa social.', 'Debería', 'Exageran'],
+    ['v2-salida-se-va', 'Salidas, previa, boliche y plata', 'El que se va temprano del boliche no se la banca.', 'No se la banca', 'Sabe irse'],
+    ['v2-salida-cuenta', 'Salidas, previa, boliche y plata', 'El que propone irse debería ayudar a cerrar la cuenta.', 'Debería ayudar', 'No le toca'],
+    ['v2-salida-extra', 'Salidas, previa, boliche y plata', 'Caer con alguien extra sin avisar cambia el plan para todos.', 'Lo cambia', 'No tanto'],
+    ['v2-salida-destino', 'Salidas, previa, boliche y plata', 'Quien organiza la previa gana un voto extra para elegir destino.', 'Gana un voto', 'Se vota igual'],
+    ['v2-salida-bar-caro', 'Salidas, previa, boliche y plata', 'Elegir un bar caro sabiendo que alguien no llega es mala leche.', 'Es mala leche', 'Cada uno decide'],
+    ['v2-salida-pedido', 'Salidas, previa, boliche y plata', 'Pedir lo más caro en una cuenta compartida se avisa antes.', 'Se avisa', 'No hace falta'],
+    ['v2-salida-foto-irse', 'Salidas, previa, boliche y plata', 'Pedir foto grupal cuando todos se quieren ir es abuso.', 'Es abuso', 'Es tradición'],
+    ['v2-salida-hombre-cuenta', 'Salidas, previa, boliche y plata', 'Un hombre que se hace el distraído con la cuenta es cómodo.', 'Es cómodo', 'No le toca pagar', 'active', 'dirigida_a_hombres'],
+    ['v2-salida-hombre-billetera', 'Salidas, previa, boliche y plata', 'Un hombre que siempre “se olvidó la billetera” ya lo planeó.', 'Ya lo planeó', 'Le pasa', 'active', 'dirigida_a_hombres'],
+    ['v2-salida-hombre-llega', 'Salidas, previa, boliche y plata', 'Un hombre que llega tarde y pide el mejor lugar se pasa.', 'Se pasa', 'Es práctico', 'active', 'dirigida_a_hombres'],
+    ['v2-salida-mujer-boliche', 'Salidas, previa, boliche y plata', 'Una mujer que llega tarde y quiere elegir el boliche se pasa.', 'Se pasa', 'Tiene derecho', 'active', 'dirigida_a_mujeres'],
+    ['v2-salida-mujer-pedido', 'Salidas, previa, boliche y plata', 'Una mujer que pide caro y después divide exacto no se puede quejar.', 'No se puede quejar', 'Es su plata', 'active', 'dirigida_a_mujeres'],
+    ['v2-salida-uber', 'Salidas, previa, boliche y plata', 'Quien pide el Uber debería esperar a que todos estén listos.', 'Debería esperar', 'Que se suban', 'reserve'],
+    ['v2-salida-lista', 'Salidas, previa, boliche y plata', 'Llegar primero no te da derecho a guardar toda la mesa.', 'No te da derecho', 'Llegó primero', 'reserve'],
+    ['v2-salida-previa-casa', 'Salidas, previa, boliche y plata', 'Hacer previa en casa ajena obliga a dejar algo en orden.', 'Obliga', 'Es una juntada', 'reserve'],
+    ['v2-salida-hombre-propina', 'Salidas, previa, boliche y plata', 'Un hombre que discute la propina por monedas quiere tener razón.', 'Quiere tener razón', 'Cuida su plata', 'reserve', 'dirigida_a_hombres'],
+    ['v2-salida-mujer-foto', 'Salidas, previa, boliche y plata', 'Una mujer que frena al grupo por fotos decide por todos.', 'Decide por todos', 'Pide dos minutos', 'reserve', 'dirigida_a_mujeres'],
+
+    // Convivencia, facultad, trabajo, viajes y vida adulta — 14 activas, 4 de reserva.
+    ['v2-vida-home-office', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Pedir home office y no responder en todo el día es abusarse.', 'Es abusarse', 'Trabaja igual'],
+    ['v2-vida-trabajo-grupo', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'El que no apareció en el trabajo grupal no puede corregir al final.', 'No puede', 'Puede opinar'],
+    ['v2-vida-cocina', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'El que cocina no debería lavar ni un plato.', 'No debería', 'Lava igual'],
+    ['v2-vida-viaje-itinerario', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Armar un viaje minuto a minuto mata la improvisación.', 'Mata el viaje', 'Evita caos'],
+    ['v2-vida-platos', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Dejar platos en remojo no cuenta como lavar.', 'No cuenta', 'Cuenta igual'],
+    ['v2-vida-alquiler', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'En convivencia, quien usa más el living no paga más alquiler.', 'No paga más', 'Debería aportar'],
+    ['v2-vida-parcial', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Estudiar toda la noche antes de un parcial es puro pánico.', 'Es puro pánico', 'Es necesario'],
+    ['v2-vida-viaje-demora', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Demorar una excursión obliga a invitar algo después.', 'Obliga', 'No compensa'],
+    ['v2-vida-camara', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Tener cámara apagada obliga a responder cuando te nombran.', 'Obliga', 'No cambia nada'],
+    ['v2-vida-hombre-ultimo', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Un hombre que deja todo para último momento espera que alguien lo salve.', 'Espera rescate', 'Funciona así', 'active', 'dirigida_a_hombres'],
+    ['v2-vida-hombre-casa', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Un hombre que usa “estoy ocupado” para no colaborar se hace el boludo.', 'Se hace el boludo', 'Tiene sus tiempos', 'active', 'dirigida_a_hombres'],
+    ['v2-vida-mujer-itinerario', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Una mujer que arma un viaje minuto a minuto mata la improvisación.', 'Mata el viaje', 'Evita caos', 'active', 'dirigida_a_mujeres'],
+    ['v2-vida-mujer-grupo', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Una mujer que hace toda la portada no debería hacer menos del resto.', 'Debería hacer menos', 'Hace igual', 'active', 'dirigida_a_mujeres'],
+    ['v2-vida-mujer-platos', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Una mujer que ordena cosas ajenas sin preguntar cruza una línea.', 'Cruza una línea', 'Está ayudando', 'active', 'dirigida_a_mujeres'],
+    ['v2-vida-mudanza', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Ayudar en una mudanza da derecho a elegir la comida.', 'Da derecho', 'No tiene relación', 'reserve'],
+    ['v2-vida-vacaciones', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Despertar temprano a todos en vacaciones es abuso.', 'Es abuso', 'Hay que aprovechar', 'reserve'],
+    ['v2-vida-compras', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'El que compra para todos no tiene que perseguir transferencias.', 'No tiene que', 'Le toca insistir', 'reserve'],
+    ['v2-vida-reunion', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Mandar un mensaje de trabajo fuera de horario puede esperar.', 'Puede esperar', 'Se responde', 'reserve'],
   ]),
 ]
 
-export const activePrompts = (intensity: Intensity) => promptPreviews.filter((prompt) => prompt.intensity === intensity && prompt.status === 'active')
+export const promptsForIntensity = (intensity: Intensity) => promptPreviews.filter((prompt) => prompt.intensity === intensity && prompt.status !== 'archived')
+export const activePrompts = (intensity: Intensity) => promptsForIntensity(intensity).filter((prompt) => prompt.status === 'active')
 
 // Sólo para poder terminar una sala mock creada con una versión anterior.
 // No entra en mazos nuevos ni cuenta como parte del catálogo editorial vigente.

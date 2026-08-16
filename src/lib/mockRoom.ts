@@ -1,5 +1,5 @@
-import { activePrompts, findPrompt } from '../data/prompts'
-import type { Intensity, MockDeck, MockPlayer, MockRoom, MockRound, PromptPreview, Side } from '../types/game'
+import { findPrompt, promptsForIntensity } from '../data/prompts'
+import type { DeckStage, Intensity, MockDeck, MockPlayer, MockRoom, MockRound, PromptPreview, Side } from '../types/game'
 import { generateRoomCode } from './roomCode'
 
 const STORAGE_PREFIX = 'contramano:room:'
@@ -24,15 +24,24 @@ function shuffled<T>(items: T[], random: Random): T[] {
   return copy
 }
 
-function newDeck(intensity: Intensity, history: string[] = [], cycle = 1, random: Random = Math.random): MockDeck {
+function promptsForStage(intensity: Intensity, stage: DeckStage): PromptPreview[] {
+  return promptsForIntensity(intensity).filter((prompt) => stage === 'active'
+    ? prompt.status === 'active'
+    : stage === 'reserve'
+      ? prompt.status === 'reserve'
+      : prompt.status === 'active' || prompt.status === 'reserve')
+}
+
+function newDeck(intensity: Intensity, history: string[] = [], cycle = 1, random: Random = Math.random, stage: DeckStage = 'active'): MockDeck {
   const recent = new Set(history.slice(-5))
-  const protectedIds = activePrompts(intensity).filter((prompt) => !recent.has(prompt.id)).map((prompt) => prompt.id)
-  const blockedIds = activePrompts(intensity).filter((prompt) => recent.has(prompt.id)).map((prompt) => prompt.id)
+  const eligible = promptsForStage(intensity, stage)
+  const protectedIds = eligible.filter((prompt) => !recent.has(prompt.id)).map((prompt) => prompt.id)
+  const blockedIds = eligible.filter((prompt) => recent.has(prompt.id)).map((prompt) => prompt.id)
   const safePrefix = shuffled(protectedIds, random)
   const delayed = shuffled(blockedIds, random)
-  const firstTen = safePrefix.slice(0, 10)
-  const remaining = shuffled([...safePrefix.slice(10), ...delayed], random)
-  return { order: [...firstTen, ...remaining], cursor: 0, history, cycle }
+  const firstFive = safePrefix.slice(0, 5)
+  const remaining = shuffled([...safePrefix.slice(5), ...delayed], random)
+  return { order: [...firstFive, ...remaining], cursor: 0, history, cycle, stage }
 }
 
 function createDecks(random: Random = Math.random): MockRoom['decks'] {
@@ -41,20 +50,34 @@ function createDecks(random: Random = Math.random): MockRoom['decks'] {
 
 function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.random): PromptPreview {
   let deck = room.decks[intensity]
-  if (deck.cursor >= deck.order.length) {
-    deck = newDeck(intensity, deck.history, deck.cycle + 1, random)
+  const hasPlayableAhead = (candidateDeck: MockDeck): boolean => candidateDeck.order.slice(candidateDeck.cursor)
+    .some((promptId) => {
+      const prompt = findPrompt(promptId)
+      return Boolean(prompt && prompt.status !== 'archived')
+    })
+
+  while (!hasPlayableAhead(deck)) {
+    // Salas guardadas antes de V2 pueden conservar IDs archivados. En vez de
+    // romper la partida, se reconstruye ese tramo con el catálogo vigente.
+    const exhausted = deck.cursor >= deck.order.length
+    const nextStage: DeckStage = exhausted ? (deck.stage === 'active' ? 'reserve' : 'repeat') : deck.stage
+    deck = newDeck(intensity, deck.history, deck.cycle + (exhausted ? 1 : 0), random, nextStage)
     room.decks[intensity] = deck
+    if (hasPlayableAhead(deck)) break
+    if (deck.stage === 'repeat' || !promptsForStage(intensity, nextStage).length) throw new Error(`No hay consignas disponibles para ${intensity}.`)
   }
-  const recentIds = new Set(deck.history.slice(-10))
+  const recentIds = new Set(deck.history.slice(-5))
   const lastCategory = deck.history.at(-1) ? findPrompt(deck.history.at(-1)!)?.category : undefined
   let selectedIndex = deck.cursor
   for (let index = deck.cursor; index < deck.order.length; index += 1) {
-    const candidate = findPrompt(deck.order[index])!
+    const candidate = findPrompt(deck.order[index])
+    if (!candidate || candidate.status === 'archived') continue
     if (!recentIds.has(candidate.id) && candidate.category !== lastCategory) { selectedIndex = index; break }
   }
   if (selectedIndex === deck.cursor && lastCategory) {
     for (let index = deck.cursor; index < deck.order.length; index += 1) {
-      const candidate = findPrompt(deck.order[index])!
+      const candidate = findPrompt(deck.order[index])
+      if (!candidate || candidate.status === 'archived') continue
       if (!recentIds.has(candidate.id)) { selectedIndex = index; break }
     }
   }
@@ -62,13 +85,19 @@ function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.
   const promptId = deck.order[deck.cursor]
   deck.cursor += 1
   deck.history.push(promptId)
-  return findPrompt(promptId)!
+  const prompt = findPrompt(promptId)
+  if (!prompt || prompt.status === 'archived') throw new Error('La consigna elegida ya no está disponible.')
+  return prompt
 }
 
 function normalizeRoom(room: MockRoom): MockRoom {
   return {
     ...room,
-    phase: room.phase ?? 'lobby', lastOddExtraSide: room.lastOddExtraSide ?? null, decks: room.decks ?? createDecks(),
+    phase: room.phase ?? 'lobby', lastOddExtraSide: room.lastOddExtraSide ?? null,
+    decks: room.decks ? {
+      tranqui: { ...room.decks.tranqui, stage: room.decks.tranqui.stage ?? 'active' },
+      bardo: { ...room.decks.bardo, stage: room.decks.bardo.stage ?? 'active' },
+    } : createDecks(),
     players: room.players.map((player) => ({ ...player, score: player.score ?? 0, activeFromRound: player.activeFromRound ?? 1, juryRounds: player.juryRounds ?? 0, lastSeenAt: player.lastSeenAt ?? room.createdAt })),
     rounds: (room.rounds ?? []).map((round) => ({ ...round, jurorIds: round.jurorIds ?? [], wasRandomTiebreak: round.wasRandomTiebreak ?? false })),
   }
@@ -269,7 +298,15 @@ export function rematchMockGame(code: string, actorId: string): MockRoom | null 
   if (!host) return room
   let nextCode = generateRoomCode(); while (getMockRoom(nextCode)) nextCode = generateRoomCode()
   const nextPlayers = connected.map((player) => ({ ...player, isHost: player.id === host.id, score: 0, juryRounds: 0, activeFromRound: 1, lastSeenAt: new Date(now).toISOString() }))
-  const next: MockRoom = { code: nextCode, hostId: host.id, intensity: room.intensity, phase: 'lobby', players: nextPlayers, rounds: [], decks: createDecks(), lastOddExtraSide: null, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 86400000).toISOString(), connectedPlayerIds: nextPlayers.map((player) => player.id) }
+  const previousFive = room.rounds.slice(-5).map((round) => round.promptId)
+  const next: MockRoom = {
+    code: nextCode, hostId: host.id, intensity: room.intensity, phase: 'lobby', players: nextPlayers, rounds: [],
+    decks: {
+      tranqui: newDeck('tranqui', previousFive),
+      bardo: newDeck('bardo', previousFive),
+    },
+    lastOddExtraSide: null, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 86400000).toISOString(), connectedPlayerIds: nextPlayers.map((player) => player.id),
+  }
   room.successorCode = nextCode; saveMockRoom(room); saveMockRoom(next); savePlayerSession(nextCode, host.id)
   return next
 }

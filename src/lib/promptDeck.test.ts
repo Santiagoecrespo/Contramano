@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { promptsForIntensity } from '../data/prompts'
 import { advanceToVoting, castMockVote, confirmPromptChange, continueMockGame, createMockRoom, getMockRoom, joinMockRoom, rematchMockGame, requestPromptChange, saveMockRoom, setMockIntensity, startMockGame } from './mockRoom'
 
 const random = () => 0
@@ -36,6 +37,7 @@ describe('mazo local persistente', () => {
     for (let index = 0; index < 4; index += 1) finishRound(replay.code, replay.hostId)
     const nextFive = getMockRoom(replay.code)!.rounds.map((round) => round.promptId)
     expect(nextFive).toHaveLength(5)
+    expect(nextFive.every((id) => !firstFive.includes(id))).toBe(true)
   })
 
   it('consume una consigna saltada y no la muestra inmediatamente', () => {
@@ -69,6 +71,35 @@ describe('mazo local persistente', () => {
     const started = startMockGame(room.code, room.hostId, random)!
     expect(started.decks.tranqui.cycle).toBe(2)
     expect(started.decks.tranqui.history.slice(-1)[0]).not.toBe(room.decks.tranqui.history[0])
-    expect(started.decks.tranqui.order.slice(0, 10).every((id) => !room.decks.tranqui.history.includes(id))).toBe(true)
+    expect(started.decks.tranqui.order.slice(0, 5).every((id) => !room.decks.tranqui.history.includes(id))).toBe(true)
+  })
+
+  it('usa reservas antes de repetir las activas', () => {
+    const original = roomWithPlayers(); const room = getMockRoom(original.code)!
+    room.decks.tranqui = {
+      order: promptsForIntensity('tranqui').filter((prompt) => prompt.status === 'active').map((prompt) => prompt.id),
+      cursor: 60,
+      history: [],
+      cycle: 1,
+      stage: 'active',
+    }
+    saveMockRoom(room)
+    const started = startMockGame(room.code, room.hostId, random)!
+    expect(started.rounds[0].prompt.status).toBe('reserve')
+    expect(started.decks.tranqui.stage).toBe('reserve')
+  })
+
+  it('no vuelve a mostrar una consigna saltada durante las dos rondas siguientes', () => {
+    const room = roomWithPlayers(); const started = startMockGame(room.code, room.hostId, random)!
+    const skipped = started.rounds[0].promptId
+    requestPromptChange(room.code, started.rounds[0].jurorIds[0])
+    const changed = confirmPromptChange(room.code, room.hostId, random)!
+    finishRound(room.code, room.hostId)
+    const second = getMockRoom(room.code)!.rounds[1]
+    finishRound(room.code, room.hostId)
+    const third = getMockRoom(room.code)!.rounds[2]
+    expect(changed.rounds[0].promptId).not.toBe(skipped)
+    expect(second.promptId).not.toBe(skipped)
+    expect(third.promptId).not.toBe(skipped)
   })
 })

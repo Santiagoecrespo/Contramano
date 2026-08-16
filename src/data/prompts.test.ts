@@ -1,69 +1,82 @@
 import { describe, expect, it } from 'vitest'
-import { activePrompts, editorialReviewedPairs, findPrompt, promptPreviews } from './prompts'
+import { activePrompts, findPrompt, promptPreviews, promptsForIntensity } from './prompts'
 
-describe('catálogo editorial de consignas', () => {
-  it('tiene 60 activas y 20 de reserva por modo, con IDs únicos', () => {
-    expect(promptPreviews).toHaveLength(160)
+const bardoCategories = [
+  'Pareja y celos',
+  'Chamuyo, citas y límites',
+  'Amistades y códigos',
+  'WhatsApp, Instagram, privacidad y redes',
+  'Gym, imagen, ropa y validación',
+  'Salidas, previa, boliche y plata',
+  'Convivencia, facultad, trabajo, viajes y vida adulta',
+]
+
+function normalize(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLocaleLowerCase('es-AR')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+}
+
+describe('catálogo editorial de consignas V2', () => {
+  it('mantiene IDs únicos y preserva las cartas históricas como archivadas', () => {
+    expect(promptPreviews).toHaveLength(290)
     expect(new Set(promptPreviews.map((prompt) => prompt.id)).size).toBe(promptPreviews.length)
-    ;(['tranqui', 'bardo'] as const).forEach((intensity) => {
-      expect(activePrompts(intensity)).toHaveLength(60)
-      expect(promptPreviews.filter((prompt) => prompt.intensity === intensity && prompt.status === 'reserve')).toHaveLength(20)
+    expect(promptPreviews.filter((prompt) => prompt.intensity === 'bardo' && prompt.status === 'archived')).toHaveLength(80)
+    expect(findPrompt('jajaj-rendirse')).toMatchObject({ status: 'archived' })
+    expect(findPrompt('panera')?.status).toBe('reserve')
+  })
+
+  it('cumple los volúmenes V2 sin mezclar cartas archivadas en el mazo', () => {
+    expect(activePrompts('tranqui')).toHaveLength(60)
+    expect(promptsForIntensity('tranqui').filter((prompt) => prompt.status === 'reserve')).toHaveLength(20)
+    expect(activePrompts('bardo')).toHaveLength(100)
+    expect(promptsForIntensity('bardo').filter((prompt) => prompt.status === 'reserve')).toHaveLength(30)
+    expect(promptsForIntensity('bardo').every((prompt) => prompt.id.startsWith('v2-'))).toBe(true)
+  })
+
+  it('reparte Bardo entre las siete categorías sin dominancia', () => {
+    const counts = activePrompts('bardo').reduce<Record<string, number>>((all, prompt) => ({
+      ...all,
+      [prompt.category]: (all[prompt.category] ?? 0) + 1,
+    }), {})
+
+    expect(Object.keys(counts).sort()).toEqual([...bardoCategories].sort())
+    Object.values(counts).forEach((count) => {
+      expect(count).toBeGreaterThanOrEqual(10)
+      expect(count).toBeLessThanOrEqual(16)
     })
   })
 
-  it('evita dominancia de categorías: cuatro activas por situación y modo', () => {
-    ;(['tranqui', 'bardo'] as const).forEach((intensity) => {
-      const counts = activePrompts(intensity).reduce<Record<string, number>>((all, prompt) => ({ ...all, [prompt.category]: (all[prompt.category] ?? 0) + 1 }), {})
-      expect(Object.keys(counts)).toHaveLength(15)
-      expect(Object.values(counts).every((count) => count <= 5)).toBe(true)
-    })
+  it('mantiene el balance editorial de género en Bardo', () => {
+    const counts = promptsForIntensity('bardo').reduce<Record<string, number>>((all, prompt) => ({
+      ...all,
+      [prompt.audienceType]: (all[prompt.audienceType] ?? 0) + 1,
+    }), {})
+
+    expect(counts.neutral).toBe(76)
+    expect(counts.dirigida_a_hombres).toBe(27)
+    expect(counts.dirigida_a_mujeres).toBe(27)
+    expect(counts.neutral).toBeGreaterThanOrEqual(65)
+    expect(Math.abs(counts.dirigida_a_hombres - counts.dirigida_a_mujeres)).toBeLessThanOrEqual(1)
   })
 
-  it('mantiene lados breves, presentes y no duplica textos activos literalmente', () => {
-    const active = promptPreviews.filter((prompt) => prompt.status === 'active')
-    active.forEach((prompt) => {
+  it('valida formato, lados breves y duplicados textuales normalizados', () => {
+    const playable = promptPreviews.filter((prompt) => prompt.status !== 'archived')
+    playable.forEach((prompt) => {
+      expect(prompt.id).toMatch(/^[a-z0-9-]+$/)
+      expect(prompt.category.trim()).not.toHaveLength(0)
+      expect(prompt.text.length).toBeLessThanOrEqual(118)
       expect(prompt.sideA.trim()).not.toHaveLength(0)
       expect(prompt.sideB.trim()).not.toHaveLength(0)
-      expect(prompt.sideA.length).toBeLessThanOrEqual(18)
-      expect(prompt.sideB.length).toBeLessThanOrEqual(18)
-      expect(prompt.sideA).not.toBe(prompt.sideB)
+      expect(prompt.sideA.length).toBeLessThanOrEqual(24)
+      expect(prompt.sideB.length).toBeLessThanOrEqual(24)
+      expect(normalize(prompt.sideA)).not.toBe(normalize(prompt.sideB))
     })
-    const normalized = active.map((prompt) => prompt.text.toLocaleLowerCase('es-AR').replace(/[^\p{L}\p{N}]+/gu, ' ').trim())
+
+    const normalized = playable.map((prompt) => normalize(prompt.text))
     expect(new Set(normalized).size).toBe(normalized.length)
-  })
-
-  it('reemplaza las formulaciones vagas por conflictos concretos', () => {
-    const retiredCopy = [
-      'El pan con chimichurri merece protagonismo propio.',
-      'El mate es más excusa para charlar que bebida.',
-      'La lista de compras compartida sólo sirve si alguien la persigue.',
-      'El que se ofrece a pagar y después persigue transferencias se contradice.',
-      'Tardar demasiado en el baño cuando hay gente esperando es egoísmo.',
-      'En un viaje siempre aparece alguien que se cree responsable sin votación.',
-      'Decir “yo pongo música” sin que nadie lo pida es una advertencia.',
-    ]
-    retiredCopy.forEach((text) => expect(promptPreviews.some((prompt) => prompt.text === text)).toBe(false))
-
-    expect(findPrompt('convivencia-lista')).toMatchObject({
-      text: 'El que compra para todos no tiene por qué perseguir transferencias.',
-      sideA: 'No tiene por qué',
-      sideB: 'Le toca insistir',
-    })
-  })
-
-  it('documenta los pares cercanos revisados para evitar duplicados semánticos', () => {
-    expect(editorialReviewedPairs.length).toBeGreaterThanOrEqual(8)
-    editorialReviewedPairs.forEach(([first, second, reason]) => {
-      expect(first).not.toBe(second)
-      expect(promptPreviews.some((prompt) => prompt.id === first)).toBe(true)
-      expect(promptPreviews.some((prompt) => prompt.id === second)).toBe(true)
-      expect(reason.length).toBeGreaterThan(12)
-    })
-  })
-
-  it('conserva una ruta de lectura para cartas retiradas de mazos mock ya existentes', () => {
-    expect(findPrompt('panera')?.status).toBe('reserve')
-    expect(findPrompt('cumple-invitar')?.status).toBe('reserve')
-    expect(activePrompts('tranqui').some((prompt) => prompt.id === 'panera')).toBe(false)
   })
 })

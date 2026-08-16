@@ -11,6 +11,7 @@ const editorialTighteningMigration = readFileSync(resolve(process.cwd(), 'supaba
 const resilienceMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130004_add_resilience.sql'), 'utf8')
 const joinRoomGrantFix = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130005_fix_join_room_grant.sql'), 'utf8')
 const launchEventsMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130006_add_launch_events.sql'), 'utf8')
+const v2Migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608160001_contramano_v2_content_and_decks.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -36,13 +37,13 @@ describe('migraciones Supabase de rondas', () => {
     ;(['tranqui', 'bardo'] as const).forEach((intensity) => {
       expect(rows.filter((row) => row[3] === intensity && row[4] === 'active')).toHaveLength(60)
       expect(rows.filter((row) => row[3] === intensity && row[4] === 'reserve')).toHaveLength(20)
-      expect(activePrompts(intensity)).toHaveLength(60)
+      expect(activePrompts(intensity)).toHaveLength(intensity === 'tranqui' ? 60 : 100)
     })
     expect(editorialCatalogMigration).toContain("update public.prompts set status='reserve'")
     expect(editorialCatalogMigration).toContain('on conflict (id) do update')
     expect(editorialCatalogMigration).not.toMatch(/\bdelete\s+from\b/i)
     expect(editorialCatalogMigration).not.toMatch(/row level security/i)
-    expect(promptPreviews).toHaveLength(160)
+    expect(promptPreviews).toHaveLength(290)
   })
 
   it('aplica la revisión de conflictos sin alterar IDs ni historial', () => {
@@ -105,5 +106,21 @@ describe('migraciones Supabase de rondas', () => {
     expect(launchEventsMigration).toContain('grant execute on function public.start_game(text),public.start_round(text),public.track_event(text,text) to authenticated;')
     expect(launchEventsMigration).not.toMatch(/disable row level security|drop policy|service_role/i)
     expect(rootMigration).toContain('Hito 5 base installation')
+  })
+
+  it('archiva el Bardo histórico y agrega el catálogo V2 con mazos escalonados', () => {
+    const rows = [...v2Migration.matchAll(/^\s*\('([^']+)', '([^']+)', 'bardo', '(active|reserve)', '(neutral|dirigida_a_hombres|dirigida_a_mujeres)'/gm)]
+    expect(rows).toHaveLength(130)
+    expect(new Set(rows.map((row) => row[1])).size).toBe(130)
+    expect(rows.filter((row) => row[3] === 'active')).toHaveLength(100)
+    expect(rows.filter((row) => row[3] === 'reserve')).toHaveLength(30)
+    expect(v2Migration).toContain("set status='archived', audience_type='neutral'")
+    expect(v2Migration).toContain("status in ('active','reserve','archived')")
+    expect(v2Migration).toContain("stage in ('active','reserve','repeat')")
+    expect(v2Migration).toContain('create or replace function public.build_prompt_deck')
+    expect(v2Migration).toContain("d.history[greatest(array_length(d.history,1)-4,1):array_length(d.history,1)]")
+    expect(v2Migration).toContain('revoke execute on function public.build_prompt_deck')
+    expect(v2Migration).not.toMatch(/\bdelete\s+from\s+public\.(prompts|rounds|votes|players)/i)
+    expect(v2Migration).not.toMatch(/disable row level security|drop policy|service_role/i)
   })
 })

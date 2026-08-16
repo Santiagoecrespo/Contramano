@@ -20,7 +20,7 @@ const room: MockRoom = {
     { id: 'host', nickname: 'Host', isHost: true, score: 0, activeFromRound: 1, juryRounds: 0 },
     { id: 'guest', nickname: 'Mili', isHost: false, score: 0, activeFromRound: 1, juryRounds: 0 },
   ],
-  rounds: [], decks: { tranqui: { order: [], cursor: 0, history: [], cycle: 1 }, bardo: { order: [], cursor: 0, history: [], cycle: 1 } },
+  rounds: [], decks: { tranqui: { order: [], cursor: 0, history: [], cycle: 1, stage: 'active' }, bardo: { order: [], cursor: 0, history: [], cycle: 1, stage: 'active' } },
   lastOddExtraSide: null, createdAt: '2026-08-12T00:00:00.000Z', expiresAt: '2030-08-13T00:00:00.000Z', serverNow: '2026-08-12T00:00:00.000Z',
 }
 
@@ -33,7 +33,7 @@ function debatingRoom(debateEndsAt: string): MockRoom {
       { id: 'guest', nickname: 'Mili', isHost: false, score: 0, activeFromRound: 1, juryRounds: 0 },
       { id: 'third', nickname: 'Tomi', isHost: false, score: 0, activeFromRound: 1, juryRounds: 0 },
     ],
-    rounds: [{ number: 1, promptId: 'asado-tarde', prompt: { id: 'asado-tarde', category: 'Asado', intensity: 'tranqui', status: 'active', text: 'Consigna de prueba', sideA: 'A favor', sideB: 'En contra' }, jurorIds: ['third'], assignments: { host: 'A', guest: 'B' }, debateEndsAt, voteEndsAt: null, votes: [], changeRequests: [], result: undefined, wasRandomTiebreak: false }],
+    rounds: [{ number: 1, promptId: 'asado-tarde', prompt: { id: 'asado-tarde', category: 'Asado', intensity: 'tranqui', status: 'active', audienceType: 'neutral', text: 'Consigna de prueba', sideA: 'A favor', sideB: 'En contra' }, jurorIds: ['third'], assignments: { host: 'A', guest: 'B' }, debateEndsAt, voteEndsAt: null, votes: [], changeRequests: [], result: undefined, wasRandomTiebreak: false }],
   }
 }
 

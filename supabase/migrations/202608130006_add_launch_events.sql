@@ -1,4 +1,4 @@
-+-- Hito 5: minimal launch metrics for existing Contramano projects.
+-- Hito 5: minimal launch metrics for existing Contramano projects.
 -- Safe after 202608130005_fix_join_room_grant.sql. It preserves all data,
 -- keeps RLS intact and only replaces RPCs to record aggregate game events.
 
@@ -45,7 +45,6 @@ begin
   select public.viewer_player(rid) into pid;
   insert into public.events(room_id,player_id,name) values(rid,pid,p_name);
 end $$;
-+
 
 create or replace function public.confirm_prompt_change(p_room_id text) returns jsonb language plpgsql security definer set search_path=public as $$
 declare rid uuid:=public.resolve_room(p_room_id); r public.rooms; current_round public.rounds; next_prompt text; skipped_prompt text;

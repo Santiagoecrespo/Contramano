@@ -305,14 +305,15 @@ h3 { margin-bottom: 7px; letter-spacing: -.035em; }
 .round-card-jury { background: var(--yellow); box-shadow: var(--shadow-ink); }
 .intensity-bardo .round-card:not(.round-card-jury) { background: var(--coral-pale); box-shadow: var(--shadow-ink); }
 .intensity-bardo .round-card::after { color: var(--coral); }
-.round-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.timer { display: inline-flex; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); font: 600 .91rem 'DM Mono', monospace; }
+.round-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.round-top .tag { max-width: min(100%, 31rem); overflow-wrap: anywhere; line-height: 1.15; }
+.timer { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); font: 600 .91rem 'DM Mono', monospace; white-space: nowrap; }
 .timer i { display: inline-block; width: 9px; height: 9px; border: 1px solid var(--line); border-radius: 50%; background: var(--coral); animation: timer-pulse 1s ease-in-out infinite; }
 .round-card > .eyebrow { margin-top: 55px; color: var(--ink); }
-.round-card h2 { max-width: 760px; margin-bottom: 39px; font-size: clamp(2rem, 4.2vw, 4.18rem); line-height: .98; }
+.round-card h2 { max-width: 760px; margin-bottom: 39px; overflow-wrap: anywhere; font-size: clamp(2rem, 4.2vw, 4.18rem); line-height: .98; }
 .my-side { display: grid; max-width: 360px; gap: 8px; }
 .my-side span, .jury-role span { font: .69rem 'DM Mono', monospace; letter-spacing: .08em; }
-.my-side strong { width: fit-content; padding: 9px 13px; border: 2px solid var(--line); border-radius: 7px 11px 7px 11px; font-size: 1.4rem; }
+.my-side strong { width: fit-content; max-width: 100%; padding: 9px 13px; overflow-wrap: anywhere; border: 2px solid var(--line); border-radius: 7px 11px 7px 11px; font-size: 1.4rem; }
 .side-a { background: var(--yellow); }
 .side-b { background: var(--paper); }
 .my-side small { color: #234d64; }
@@ -403,6 +404,7 @@ h3 { margin-bottom: 7px; letter-spacing: -.035em; }
   .round-card.compact { min-height: 350px; }
   .round-card > .eyebrow { margin-top: 33px; }
   .round-card h2 { margin-bottom: 31px; font-size: clamp(2.12rem, 10vw, 3.05rem); }
+  .round-top .tag { max-width: calc(100% - 72px); }
   .round-card::after { right: -30px; bottom: -62px; font-size: 13rem; }
   .button { min-height: 54px; }
   .choice { min-height: 108px; }
