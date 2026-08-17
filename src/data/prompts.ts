@@ -1,9 +1,10 @@
 import type { Intensity, PromptAudience, PromptPreview, PromptStatus } from '../types/game'
+import { bardoV3Prompts } from './bardoV3'
 
 type PromptSeed = [string, string, string, string, string, PromptStatus?, PromptAudience?]
 const makePrompts = (intensity: Intensity, seeds: PromptSeed[]): PromptPreview[] => seeds.map(([id, category, text, sideA, sideB, status = 'active', audienceType = 'neutral']) => ({ id, category, text, sideA, sideB, status, audienceType, intensity }))
 
-export const promptPreviews: PromptPreview[] = [
+const historicalPromptPreviews: PromptPreview[] = [
   ...makePrompts('tranqui', [
     ['asado-tarde', 'Asado', 'Llegar con hielo a un asado te habilita a caer tarde.', 'Habilita', 'No habilita'],
     ['asado-parrilla', 'Asado', 'El que se adueña de la parrilla no debería recibir sugerencias.', 'Sin consejos', 'Se escucha'],
@@ -313,6 +314,16 @@ export const promptPreviews: PromptPreview[] = [
     ['v2-vida-compras', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'El que compra para todos no tiene que perseguir transferencias.', 'No tiene que', 'Le toca insistir', 'reserve'],
     ['v2-vida-reunion', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'Mandar un mensaje de trabajo fuera de horario puede esperar.', 'Puede esperar', 'Se responde', 'reserve'],
   ]),
+]
+
+// Las cartas Bardo previas quedan disponibles para resolver rondas e historial
+// ya guardados, pero ninguna entra en mazos nuevos. El catálogo V3 es la única
+// fuente local seleccionable para intensidad Bardo.
+export const promptPreviews: PromptPreview[] = [
+  ...historicalPromptPreviews.map((prompt) => prompt.intensity === 'bardo'
+    ? { ...prompt, status: 'archived' as const, audienceType: 'neutral' as const }
+    : prompt),
+  ...bardoV3Prompts,
 ]
 
 export const promptsForIntensity = (intensity: Intensity) => promptPreviews.filter((prompt) => prompt.intensity === intensity && prompt.status !== 'archived')

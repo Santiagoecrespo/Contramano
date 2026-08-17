@@ -5,8 +5,8 @@ import { advanceToVoting, castMockVote, confirmPromptChange, continueMockGame, c
 const random = () => 0
 beforeEach(() => localStorage.clear())
 
-function roomWithPlayers() {
-  const room = createMockRoom('Host', 'tranqui')
+function roomWithPlayers(intensity: 'tranqui' | 'bardo' = 'tranqui') {
+  const room = createMockRoom('Host', intensity)
   joinMockRoom(room.code, 'Mili'); joinMockRoom(room.code, 'Tomi'); joinMockRoom(room.code, 'Sofi')
   return room
 }
@@ -26,6 +26,15 @@ describe('mazo local persistente', () => {
     rounds.slice(1).forEach((round, index) => expect(round.prompt.category).not.toBe(rounds[index].prompt.category))
   })
 
+  it('aplica las mismas reglas de cinco rondas al catálogo Bardo V3', () => {
+    const room = roomWithPlayers('bardo'); startMockGame(room.code, room.hostId, random)
+    for (let index = 0; index < 4; index += 1) finishRound(room.code, room.hostId)
+    const rounds = getMockRoom(room.code)!.rounds
+    expect(rounds.every((round) => round.promptId.startsWith('bardo-v3-'))).toBe(true)
+    expect(new Set(rounds.map((round) => round.promptId)).size).toBe(5)
+    rounds.slice(1).forEach((round, index) => expect(round.prompt.category).not.toBe(rounds[index].prompt.category))
+  })
+
   it('crea una sala nueva al pedir revancha y no altera el historial original', () => {
     const room = roomWithPlayers(); startMockGame(room.code, room.hostId, random)
     for (let index = 0; index < 4; index += 1) finishRound(room.code, room.hostId)
@@ -38,6 +47,17 @@ describe('mazo local persistente', () => {
     const nextFive = getMockRoom(replay.code)!.rounds.map((round) => round.promptId)
     expect(nextFive).toHaveLength(5)
     expect(nextFive.every((id) => !firstFive.includes(id))).toBe(true)
+  })
+
+  it('evita las cinco consignas Bardo de la partida anterior al pedir revancha', () => {
+    const room = roomWithPlayers('bardo'); startMockGame(room.code, room.hostId, random)
+    for (let index = 0; index < 4; index += 1) finishRound(room.code, room.hostId)
+    const finished = finishRound(room.code, room.hostId)
+    const firstFive = finished.rounds.map((round) => round.promptId)
+    const replay = rematchMockGame(room.code, room.hostId)!
+    startMockGame(replay.code, replay.hostId, random)
+    for (let index = 0; index < 4; index += 1) finishRound(replay.code, replay.hostId)
+    expect(getMockRoom(replay.code)!.rounds.map((round) => round.promptId).every((id) => !firstFive.includes(id))).toBe(true)
   })
 
   it('consume una consigna saltada y no la muestra inmediatamente', () => {
@@ -89,6 +109,32 @@ describe('mazo local persistente', () => {
     expect(started.decks.tranqui.stage).toBe('reserve')
   })
 
+  it('usa reservas Bardo sólo después de agotar las 100 activas', () => {
+    const original = roomWithPlayers('bardo'); const room = getMockRoom(original.code)!
+    room.decks.bardo = {
+      order: promptsForIntensity('bardo').filter((prompt) => prompt.status === 'active').map((prompt) => prompt.id),
+      cursor: 100,
+      history: [],
+      cycle: 1,
+      stage: 'active',
+    }
+    saveMockRoom(room)
+    const started = startMockGame(room.code, room.hostId, random)!
+    expect(started.rounds[0].prompt.status).toBe('reserve')
+    expect(started.decks.bardo.stage).toBe('reserve')
+  })
+
+  it('no selecciona IDs Bardo archivados aunque una sala guardada los conserve en su orden', () => {
+    const original = roomWithPlayers('bardo'); const room = getMockRoom(original.code)!
+    const archivedId = 'v2-pareja-ubicacion'
+    const activeId = promptsForIntensity('bardo').find((prompt) => prompt.status === 'active')!.id
+    room.decks.bardo = { order: [archivedId, activeId], cursor: 0, history: [], cycle: 1, stage: 'active' }
+    saveMockRoom(room)
+    const started = startMockGame(room.code, room.hostId, random)!
+    expect(started.rounds[0].promptId).toBe(activeId)
+    expect(started.rounds[0].prompt.status).toBe('active')
+  })
+
   it('no vuelve a mostrar una consigna saltada durante las dos rondas siguientes', () => {
     const room = roomWithPlayers(); const started = startMockGame(room.code, room.hostId, random)!
     const skipped = started.rounds[0].promptId
@@ -101,5 +147,17 @@ describe('mazo local persistente', () => {
     expect(changed.rounds[0].promptId).not.toBe(skipped)
     expect(second.promptId).not.toBe(skipped)
     expect(third.promptId).not.toBe(skipped)
+  })
+
+  it('mantiene la protección de dos rondas también al saltar una carta Bardo', () => {
+    const room = roomWithPlayers('bardo'); const started = startMockGame(room.code, room.hostId, random)!
+    const skipped = started.rounds[0].promptId
+    requestPromptChange(room.code, started.rounds[0].jurorIds[0])
+    confirmPromptChange(room.code, room.hostId, random)
+    finishRound(room.code, room.hostId)
+    const second = getMockRoom(room.code)!.rounds[1]
+    finishRound(room.code, room.hostId)
+    const third = getMockRoom(room.code)!.rounds[2]
+    expect([second.promptId, third.promptId]).not.toContain(skipped)
   })
 })

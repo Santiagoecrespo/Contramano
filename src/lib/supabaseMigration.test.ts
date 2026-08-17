@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { bardoV3Prompts } from '../data/bardoV3'
 import { activePrompts, promptPreviews } from '../data/prompts'
 
 const rootMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608120001_realtime_multiplayer.sql'), 'utf8')
@@ -12,6 +13,7 @@ const resilienceMigration = readFileSync(resolve(process.cwd(), 'supabase/migrat
 const joinRoomGrantFix = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130005_fix_join_room_grant.sql'), 'utf8')
 const launchEventsMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130006_add_launch_events.sql'), 'utf8')
 const v2Migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608160001_contramano_v2_content_and_decks.sql'), 'utf8')
+const v3Migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608170001_bardo_v3_catalog.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -43,7 +45,7 @@ describe('migraciones Supabase de rondas', () => {
     expect(editorialCatalogMigration).toContain('on conflict (id) do update')
     expect(editorialCatalogMigration).not.toMatch(/\bdelete\s+from\b/i)
     expect(editorialCatalogMigration).not.toMatch(/row level security/i)
-    expect(promptPreviews).toHaveLength(290)
+    expect(promptPreviews).toHaveLength(420)
   })
 
   it('aplica la revisión de conflictos sin alterar IDs ni historial', () => {
@@ -123,5 +125,22 @@ describe('migraciones Supabase de rondas', () => {
     expect(v2Migration).toContain("'Mandar un mensaje de trabajo fuera de horario puede esperar.', 'Puede esperar', 'Se responde')\non conflict (id) do update set")
     expect(v2Migration).not.toMatch(/\bdelete\s+from\s+public\.(prompts|rounds|votes|players)/i)
     expect(v2Migration).not.toMatch(/disable row level security|drop policy|service_role/i)
+  })
+
+  it('conserva los prompts históricos y sincroniza las 130 cartas Bardo V3 con mock', () => {
+    const rows = [...v3Migration.matchAll(/^\('([^']+)', '([^']+)', 'bardo', '(active|reserve)', '(neutral|dirigida_a_hombres|dirigida_a_mujeres)', '([^']+)', '([^']+)', '([^']+)'\)(?:,|$)/gm)]
+    expect(rows).toHaveLength(130)
+    expect(new Set(rows.map((row) => row[1])).size).toBe(130)
+    expect(rows.map((row) => ({
+      id: row[1], category: row[2], status: row[3], audienceType: row[4], text: row[5], sideA: row[6], sideB: row[7],
+    }))).toEqual(bardoV3Prompts.map((prompt) => ({
+      id: prompt.id, category: prompt.category, status: prompt.status, audienceType: prompt.audienceType, text: prompt.text, sideA: prompt.sideA, sideB: prompt.sideB,
+    })))
+    expect(rows.filter((row) => row[3] === 'active')).toHaveLength(100)
+    expect(rows.filter((row) => row[3] === 'reserve')).toHaveLength(30)
+    expect(v3Migration).toContain("where intensity='bardo' and id not like 'bardo-v3-%'")
+    expect(v3Migration).toContain('on conflict (id) do update set')
+    expect(v3Migration).not.toMatch(/\bdelete\s+from\s+public\.(prompts|rounds|votes|players)/i)
+    expect(v3Migration).not.toMatch(/disable row level security|drop policy|service_role/i)
   })
 })
