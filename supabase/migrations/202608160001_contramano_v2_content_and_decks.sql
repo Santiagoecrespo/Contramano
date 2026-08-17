@@ -151,7 +151,7 @@ insert into public.prompts(id,category,intensity,status,audience_type,text,side_
   ('v2-vida-mudanza', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'bardo', 'reserve', 'neutral', 'Ayudar en una mudanza da derecho a elegir la comida.', 'Da derecho', 'No tiene relación'),
   ('v2-vida-vacaciones', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'bardo', 'reserve', 'neutral', 'Despertar temprano a todos en vacaciones es abuso.', 'Es abuso', 'Hay que aprovechar'),
   ('v2-vida-compras', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'bardo', 'reserve', 'neutral', 'El que compra para todos no tiene que perseguir transferencias.', 'No tiene que', 'Le toca insistir'),
-  ('v2-vida-reunion', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'bardo', 'reserve', 'neutral', 'Mandar un mensaje de trabajo fuera de horario puede esperar.', 'Puede esperar', 'Se responde');
+  ('v2-vida-reunion', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'bardo', 'reserve', 'neutral', 'Mandar un mensaje de trabajo fuera de horario puede esperar.', 'Puede esperar', 'Se responde')
 on conflict (id) do update set
   category=excluded.category,
   intensity=excluded.intensity,

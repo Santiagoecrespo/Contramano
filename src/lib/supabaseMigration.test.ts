@@ -120,6 +120,7 @@ describe('migraciones Supabase de rondas', () => {
     expect(v2Migration).toContain('create or replace function public.build_prompt_deck')
     expect(v2Migration).toContain("d.history[greatest(array_length(d.history,1)-4,1):array_length(d.history,1)]")
     expect(v2Migration).toContain('revoke execute on function public.build_prompt_deck')
+    expect(v2Migration).toContain("'Mandar un mensaje de trabajo fuera de horario puede esperar.', 'Puede esperar', 'Se responde')\non conflict (id) do update set")
     expect(v2Migration).not.toMatch(/\bdelete\s+from\s+public\.(prompts|rounds|votes|players)/i)
     expect(v2Migration).not.toMatch(/disable row level security|drop policy|service_role/i)
   })
