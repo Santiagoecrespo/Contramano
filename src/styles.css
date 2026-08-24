@@ -616,3 +616,69 @@ h1 em { color: var(--yellow); }
   .duel-question-topline { font-size: .62rem; }
   .duel-stats-card span { font-size: .72rem; }
 }
+
+/* Landing refinement: the game choice is the visual priority, without touching game flows. */
+.app-shell:has(.landing-page) .site-header { min-height: 105px; }
+.app-shell:has(.landing-page) .brand { gap: 13px; font-size: clamp(1.72rem, 3vw, 2.35rem); letter-spacing: -.09em; }
+.app-shell:has(.landing-page) .brand-mark { width: clamp(39px, 4vw, 49px); height: clamp(39px, 4vw, 49px); border-radius: 12px 21px 12px 21px; font-size: 1.18rem; box-shadow: 4px 4px 0 var(--fuchsia); }
+.app-shell:has(.landing-page) .header-note { color: #a8a0c2; font-size: .75rem; }
+.landing-page .hero { min-height: 620px; grid-template-columns: minmax(0, 1.02fr) minmax(330px, .91fr); gap: clamp(50px, 8vw, 120px); padding-top: 57px; }
+.landing-page .hero-copy { max-width: 585px; }
+.landing-page .hero h1 { max-width: 640px; margin-bottom: 24px; font-size: clamp(3.65rem, 7vw, 6.45rem); line-height: .87; }
+.landing-page .hero h1 em { color: #ffe843; text-shadow: 0 4px 0 rgb(65 34 117 / 32%); }
+.landing-page .hero-text { max-width: 465px; color: #f0edff; font-size: clamp(1.08rem, 1.8vw, 1.25rem); font-weight: 500; line-height: 1.38; }
+.landing-page .hero::before { width: 145px; height: 145px; border-width: 3px; box-shadow: 0 0 0 11px rgb(239 94 255 / 12%); }
+.landing-page .hero::after { width: 77px; height: 77px; border-width: 3px; box-shadow: 0 0 0 9px rgb(255 227 94 / 10%); }
+.landing-page .mode-grid { max-width: 590px; gap: 16px; margin-top: 30px; }
+.landing-page .mode-card { position: relative; min-height: 205px; align-content: start; gap: 10px; overflow: hidden; padding: 17px 17px 19px; border: 2px solid rgb(255 255 255 / 88%); border-radius: 20px 11px 20px 11px; box-shadow: 6px 7px 0 rgb(0 0 0 / 35%); color: #1a1435; }
+.landing-page .mode-card::after { position: absolute; right: -24px; bottom: -35px; width: 95px; height: 95px; border: 2px solid rgb(25 20 47 / 82%); border-radius: 50%; content: ''; opacity: .4; transform: rotate(20deg); }
+.landing-page .mode-online { background: linear-gradient(145deg, #52d9ff, #81ebff 57%, #57b8ff); }
+.landing-page .mode-duel { background: linear-gradient(145deg, #ff5d78, #ff779f 54%, #ef5eff); }
+.landing-page .mode-card:hover { transform: translate(-5px, -6px) rotate(-.8deg); box-shadow: 11px 14px 0 var(--fuchsia), 0 0 28px rgb(255 227 94 / 27%); }
+.landing-page .mode-duel:hover { transform: translate(-5px, -6px) rotate(.8deg); box-shadow: 11px 14px 0 var(--sky), 0 0 28px rgb(239 94 255 / 34%); }
+.landing-page .mode-chip { z-index: 1; width: fit-content; padding: 5px 8px; border: 2px solid #1a1435; border-radius: 999px; background: rgb(255 255 255 / 84%); color: #1a1435; font: 700 .61rem 'DM Mono', monospace; letter-spacing: .06em; line-height: 1.1; }
+.landing-page .mode-icon { z-index: 1; width: 42px; height: 42px; margin-top: 3px; border-color: #1a1435; background: #fffdfc; box-shadow: 2px 2px 0 rgb(25 20 47 / 50%); font-size: 1.4rem; }
+.landing-page .mode-card-title { z-index: 1; font-size: clamp(1.35rem, 2vw, 1.68rem); font-weight: 800; letter-spacing: -.06em; line-height: .98; }
+.landing-page .mode-card small { z-index: 1; max-width: 215px; color: #2c244b; font-size: .83rem; font-weight: 600; line-height: 1.28; }
+.landing-page .hero-actions { margin: 18px 0 10px; }
+.landing-page .hero-actions .button { min-height: 48px; border-color: rgb(255 255 255 / 72%); background: rgb(255 255 255 / 94%); color: #1a1435; }
+.landing-page .microcopy { color: #b9b1d5; }
+.landing-page .hero-debate-card { min-height: 430px; padding: 29px; border-width: 3px; background: linear-gradient(145deg, #ffe85d 0%, #ff967d 52%, #ec62ff 100%); box-shadow: 12px 14px 0 #72e4ff, 0 0 36px rgb(239 94 255 / 24%); transform: rotate(3deg) translateY(-8px); }
+.landing-page .hero-debate-card::before { right: -23px; bottom: -24px; width: 159px; height: 159px; border-width: 3px; background: #76e5ff; }
+.landing-page .hero-debate-card .prompt-topline { font-weight: 700; }
+.landing-page .hero-debate-card .tag { border-width: 2px; background: #fffafc; }
+.landing-page .hero-debate-card > p { max-width: 445px; margin: 48px 0 37px; font-size: clamp(1.86rem, 3.3vw, 2.68rem); line-height: .97; }
+.landing-page .hero-debate-card .sides { gap: 10px; }
+.landing-page .hero-debate-card .sides span { min-height: 64px; display: grid; place-items: center; border-width: 2px; background: #fffafc; font-size: 1rem; line-height: 1.08; }
+.landing-page .hero-debate-card .sides span:first-child { background: #75e5ff; }
+.landing-page .hero-debate-card .scribble { color: #43227f; font-size: .9rem; }
+
+.landing-cursor { position: fixed; z-index: 20; top: 0; left: 0; display: grid; width: 22px; height: 22px; place-items: center; border: 2px solid #1a1435; border-radius: 50%; background: #ffe843; color: #1a1435; font-size: .65rem; line-height: 1; opacity: 0; pointer-events: none; transition: width .16s ease, height .16s ease, margin .16s ease, opacity .14s ease, background-color .16s ease; }
+.landing-cursor.is-active { width: 38px; height: 38px; margin: -19px 0 0 -19px; background: #fffafc; box-shadow: 0 0 0 3px rgb(255 232 67 / 34%); opacity: 1; }
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .landing-page [data-landing-interactive] { cursor: none; }
+}
+
+@media (max-width: 760px) {
+  .app-shell:has(.landing-page) .site-header { min-height: 82px; }
+  .app-shell:has(.landing-page) .brand { gap: 10px; font-size: 1.58rem; }
+  .app-shell:has(.landing-page) .brand-mark { width: 37px; height: 37px; font-size: .95rem; }
+  .landing-page .hero { min-height: 0; grid-template-columns: 1fr; gap: 49px; padding-top: 42px; }
+  .landing-page .hero h1 { max-width: 350px; font-size: clamp(3.35rem, 15vw, 4.65rem); line-height: .89; }
+  .landing-page .hero-text { max-width: 340px; }
+  .landing-page .mode-grid { max-width: 390px; gap: 14px; }
+  .landing-page .mode-card { grid-template-columns: auto 1fr; min-height: 126px; column-gap: 13px; padding: 14px; }
+  .landing-page .mode-chip { grid-column: 1 / -1; font-size: .58rem; }
+  .landing-page .mode-icon { grid-row: 2 / span 2; width: 38px; height: 38px; margin-top: 0; }
+  .landing-page .mode-card-title { align-self: end; font-size: 1.42rem; }
+  .landing-page .mode-card small { grid-column: 2; max-width: 255px; font-size: .78rem; }
+  .landing-page .hero-debate-card { min-height: 358px; padding: 23px; transform: rotate(1.7deg); }
+  .landing-page .hero-debate-card > p { margin: 41px 0 28px; font-size: clamp(1.82rem, 8.6vw, 2.4rem); }
+  .landing-page .hero-debate-card .sides span { min-height: 56px; padding: 8px; font-size: .91rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-page .mode-card:hover, .landing-page .mode-duel:hover { transform: none; }
+  .landing-cursor { display: none; }
+}

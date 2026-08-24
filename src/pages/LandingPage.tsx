@@ -1,42 +1,83 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Layout } from '../components/Layout'
-import { promptPreviews } from '../data/prompts'
+
+type LandingCursorState = {
+  x: number
+  y: number
+  isOverInteractiveElement: boolean
+}
+
+function LandingCursor() {
+  const [enabled, setEnabled] = useState(false)
+  const [cursor, setCursor] = useState<LandingCursorState>({ x: 0, y: 0, isOverInteractiveElement: false })
+
+  useEffect(() => {
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updateEnabled = () => setEnabled(finePointer.matches && !reducedMotion.matches)
+    const updateCursor = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return
+
+      const target = event.target
+      const isOverInteractiveElement = target instanceof Element && target.closest('[data-landing-interactive]') !== null
+      setCursor({ x: event.clientX, y: event.clientY, isOverInteractiveElement })
+    }
+
+    updateEnabled()
+    finePointer.addEventListener('change', updateEnabled)
+    reducedMotion.addEventListener('change', updateEnabled)
+    window.addEventListener('pointermove', updateCursor)
+
+    return () => {
+      finePointer.removeEventListener('change', updateEnabled)
+      reducedMotion.removeEventListener('change', updateEnabled)
+      window.removeEventListener('pointermove', updateCursor)
+    }
+  }, [])
+
+  if (!enabled) return null
+
+  return <span className={`landing-cursor ${cursor.isOverInteractiveElement ? 'is-active' : ''}`} style={{ transform: `translate3d(${cursor.x}px, ${cursor.y}px, 0)` }} aria-hidden="true"><span>↗</span></span>
+}
 
 export function LandingPage() {
-  const preview = promptPreviews[0]
   return (
     <Layout>
-      <section className="hero">
-        <div className="hero-copy">
-          <p className="eyebrow">PARA JUNTADAS QUE YA VIENEN CON TEMA</p>
-          <h1>Elegí una postura.<br /><em>Defendela igual.</em></h1>
-          <p className="hero-text">Elegí cómo jugar y dejá que una consigna haga el resto.</p>
-          <div className="mode-grid" aria-label="Elegí un modo de juego">
-            <Link className="mode-card mode-online" to="/crear"><span className="mode-icon" aria-hidden="true">↗</span><span>Juntada online</span><small>3 a 8 personas · cada quien desde su celular</small></Link>
-            <Link className="mode-card mode-duel" to="/cara-a-cara"><span className="mode-icon" aria-hidden="true">↔</span><span>Cara a cara</span><small>2 personas · un dispositivo</small></Link>
+      <div className="landing-page">
+        <section className="hero">
+          <div className="hero-copy">
+            <p className="eyebrow">PARA JUNTADAS QUE YA VIENEN CON TEMA</p>
+            <h1>Elegí una postura.<br /><em>Defendela con todo.</em></h1>
+            <p className="hero-text">Entren, voten y descubran quién quedó más en contramano.</p>
+            <div className="mode-grid" aria-label="Elegí un modo de juego">
+              <Link className="mode-card mode-online" to="/crear" data-landing-interactive><span className="mode-chip">3 A 8 PERSONAS</span><span className="mode-icon" aria-hidden="true">↗</span><span className="mode-card-title">Juntada online</span><small>Armen la mesa y jueguen cada quien desde su celular.</small></Link>
+              <Link className="mode-card mode-duel" to="/cara-a-cara" data-landing-interactive><span className="mode-chip">2 PERSONAS · 1 DISPOSITIVO</span><span className="mode-icon" aria-hidden="true">↔</span><span className="mode-card-title">Cara a cara</span><small>Voten en secreto y vean si van por la misma vereda.</small></Link>
+            </div>
+            <div className="hero-actions">
+              <Link className="button button-secondary" to="/unirse" data-landing-interactive>Tengo un código de sala</Link>
+            </div>
+            <p className="microcopy">Funciona desde un link. No instalás nada.</p>
           </div>
-          <div className="hero-actions">
-            <Link className="button button-secondary" to="/unirse">Tengo un código de sala</Link>
+          <aside className="prompt-card hero-debate-card" aria-label="Ejemplo decorativo de consigna">
+            <div className="prompt-topline"><span className="tag tag-blue">PAREJAS</span><span>01:00</span></div>
+            <span className="card-edition" aria-hidden="true">MESA 01</span>
+            <p>¿Mandarle fueguitos a otra persona estando en pareja cuenta como engaño?</p>
+            <div className="sides"><span>Sí, re cuenta</span><span>No, es una pavada</span></div>
+            <div className="scribble">sin filtro ↑</div>
+          </aside>
+        </section>
+        <section className="how-it-works" aria-labelledby="how-title">
+          <p className="eyebrow">SIN VUELTAS</p>
+          <h2 id="how-title">Se arma en menos de un tema.</h2>
+          <div className="steps">
+            <article><b>01</b><h3>Creá la mesa</h3><p>Elegí el tono y compartí QR o link.</p><span aria-hidden="true">↗</span></article>
+            <article><b>02</b><h3>Tomá postura</h3><p>Te toca defenderla aunque no sea la tuya.</p><span aria-hidden="true">↔</span></article>
+            <article><b>03</b><h3>Voten y sigan</h3><p>La mesa decide. Cinco rondas y revancha.</p><span aria-hidden="true">★</span></article>
           </div>
-          <p className="microcopy">Funciona desde un link. No instalás nada.</p>
-        </div>
-        <aside className="prompt-card hero-debate-card" aria-label="Ejemplo de consigna">
-          <div className="prompt-topline"><span className="tag tag-blue">{preview.category}</span><span>01:00</span></div>
-          <span className="card-edition" aria-hidden="true">MESA 01</span>
-          <p>{preview.text}</p>
-          <div className="sides"><span>{preview.sideA}</span><span>{preview.sideB}</span></div>
-          <div className="scribble">bardo sano ↑</div>
-        </aside>
-      </section>
-      <section className="how-it-works" aria-labelledby="how-title">
-        <p className="eyebrow">SIN VUELTAS</p>
-        <h2 id="how-title">Se arma en menos de un tema.</h2>
-        <div className="steps">
-          <article><b>01</b><h3>Creá la mesa</h3><p>Elegí el tono y compartí QR o link.</p><span aria-hidden="true">↗</span></article>
-          <article><b>02</b><h3>Tomá postura</h3><p>Te toca defenderla aunque no sea la tuya.</p><span aria-hidden="true">↔</span></article>
-          <article><b>03</b><h3>Voten y sigan</h3><p>La mesa decide. Cinco rondas y revancha.</p><span aria-hidden="true">★</span></article>
-        </div>
-      </section>
+        </section>
+        <LandingCursor />
+      </div>
     </Layout>
   )
 }
