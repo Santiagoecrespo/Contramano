@@ -1,9 +1,8 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { promptPreviews } from '../data/prompts'
 
 export function LandingPage() {
-  const navigate = useNavigate()
   const preview = promptPreviews[0]
   return (
     <Layout>
@@ -11,10 +10,13 @@ export function LandingPage() {
         <div className="hero-copy">
           <p className="eyebrow">PARA JUNTADAS QUE YA VIENEN CON TEMA</p>
           <h1>Elegí una postura.<br /><em>Defendela igual.</em></h1>
-          <p className="hero-text">Un juego rápido para discutir pavadas importantes, votar y ver quién convence a la mesa.</p>
+          <p className="hero-text">Elegí cómo jugar y dejá que una consigna haga el resto.</p>
+          <div className="mode-grid" aria-label="Elegí un modo de juego">
+            <Link className="mode-card mode-online" to="/crear"><span className="mode-icon" aria-hidden="true">↗</span><span>Juntada online</span><small>3 a 8 personas · cada quien desde su celular</small></Link>
+            <Link className="mode-card mode-duel" to="/cara-a-cara"><span className="mode-icon" aria-hidden="true">↔</span><span>Cara a cara</span><small>2 personas · un dispositivo</small></Link>
+          </div>
           <div className="hero-actions">
-            <button className="button button-primary" onClick={() => navigate('/crear')}>Crear una sala <span aria-hidden="true">→</span></button>
-            <Link className="button button-secondary" to="/unirse">Tengo un código</Link>
+            <Link className="button button-secondary" to="/unirse">Tengo un código de sala</Link>
           </div>
           <p className="microcopy">Funciona desde un link. No instalás nada.</p>
         </div>
