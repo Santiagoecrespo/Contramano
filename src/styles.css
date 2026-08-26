@@ -682,3 +682,31 @@ h1 em { color: var(--yellow); }
   .landing-page .mode-card:hover, .landing-page .mode-duel:hover { transform: none; }
   .landing-cursor { display: none; }
 }
+
+/* La landing usa un fondo pastel propio: conserva el contraste y evita que la
+   sección de presentación herede el violeta oscuro del resto del juego. */
+html:has(.landing-page), body:has(.landing-page) {
+  background: #f6f0ff;
+}
+body:has(.landing-page) {
+  background:
+    radial-gradient(circle at 8% 7%, rgb(255 218 151 / 68%) 0, transparent 25%),
+    radial-gradient(circle at 88% 12%, rgb(167 229 247 / 72%) 0, transparent 27%),
+    radial-gradient(circle at 76% 90%, rgb(247 180 206 / 45%) 0, transparent 30%),
+    linear-gradient(145deg, #fff9e9 0%, #eaf8f8 48%, #f6eaff 100%);
+}
+.app-shell:has(.landing-page) .site-header { border-bottom-color: rgb(62 38 95 / 25%); }
+.app-shell:has(.landing-page) .brand { color: #30204d; }
+.app-shell:has(.landing-page) .header-note { color: #6c5c7e; }
+.landing-page .hero-copy, .landing-page .how-it-works { color: #30204d; }
+.landing-page .hero-text { color: #5f516d; }
+.landing-page .hero h1 em { color: #d96d27; text-shadow: 0 3px 0 rgb(255 255 255 / 75%); }
+.landing-page .microcopy { color: #6c5c7e; }
+.landing-page .hero-actions .button { border-color: #5d4678; background: rgb(255 255 255 / 82%); color: #30204d; }
+.landing-page .how-it-works { margin-top: 15px; padding: clamp(28px, 5vw, 50px); border: 2px solid rgb(90 67 122 / 27%); border-radius: 26px 13px 26px 13px; background: rgb(255 255 255 / 48%); box-shadow: 8px 9px 0 rgb(218 161 193 / 35%); }
+.landing-page .how-it-works .eyebrow { color: #d34d77; }
+.landing-page .how-it-works h2 { color: #30204d; }
+.landing-page .how-it-works, .landing-page .steps { border-color: rgb(90 67 122 / 29%); }
+.landing-page .steps article, .landing-page .steps article + article { border-color: rgb(90 67 122 / 23%); }
+.landing-page .steps p { color: #5f516d; }
+.landing-page .steps article > span { color: #d96d27; }

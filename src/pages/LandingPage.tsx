@@ -90,10 +90,10 @@ export function LandingPage() {
         </section>
         <section className="how-it-works" aria-labelledby="how-title">
           <p className="eyebrow">SIN VUELTAS</p>
-          <h2 id="how-title">Se arma en menos de un tema.</h2>
+          <h2 id="how-title">Se arma en dos patadas.</h2>
           <div className="steps">
             <article><b>01</b><h3>Creá la mesa</h3><p>Elegí el tono y compartí QR o link.</p><span aria-hidden="true">↗</span></article>
-            <article><b>02</b><h3>Tomá postura</h3><p>Te toca defenderla aunque no sea la tuya.</p><span aria-hidden="true">↔</span></article>
+            <article><b>02</b><h3>Defendé tu postura</h3><p>Te toca defenderla aunque no sea la tuya.</p><span aria-hidden="true">↔</span></article>
             <article><b>03</b><h3>Voten y sigan</h3><p>La mesa decide. Cinco rondas y revancha.</p><span aria-hidden="true">★</span></article>
           </div>
         </section>
