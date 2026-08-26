@@ -1,0 +1,557 @@
+-- Contramano: catálogo Bardo normalizado.
+-- Fuente editorial: docs/IvardoCatálogoEditorial.normalizado.md.
+-- Es idempotente: conserva historial y nunca borra prompts ni partidas.
+
+alter table public.prompts drop constraint if exists prompts_audience_type_check;
+alter table public.prompts add constraint prompts_audience_type_check
+  check (audience_type in ('neutral','dirigida_a_hombres','dirigida_a_mujeres','archive','revisar'));
+
+with desired(id, category, status, audience_type, text, side_a, side_b) as (
+  values
+  ('bardo-v3-pareja-ubicacion', 'Pareja y celos', 'active', 'neutral', '¿Tener ubicación compartida con tu pareja es una forma de control?', 'Sí, es de tóxico', 'No, es cuidarla'),
+  ('bardo-v3-pareja-ex-diario', 'Pareja y celos', 'active', 'neutral', '¿Hablar con tu ex todos los días significa que no cerraste la relación?', 'Sí, no cerraste', 'No, es seguir la amistad'),
+  ('bardo-v3-pareja-fotos-sugerentes', 'Pareja y celos', 'active', 'neutral', '¿Subir fotos con poca ropa estando en pareja busca atención de otras personas?', 'Sí, busca atención', 'No, es solo una fotito'),
+  ('bardo-v3-pareja-celular', 'Pareja y celos', 'active', 'neutral', '¿Revisar el celular de tu pareja está mal aunque encuentres algo?', 'Sí, está mal', 'No, queda justificado'),
+  ('bardo-v3-pareja-mejores-amigos', 'Pareja y celos', 'active', 'neutral', '¿Tener lista de mejores amigos para subir estados es buscar atención?', 'Sí, una falta de afecto', 'No, es solo para compartir'),
+  ('bardo-v3-pareja-fines-semana', 'Pareja y celos', 'active', 'neutral', '¿Salir todos los fines de semana sin tu novia desgasta la relación?', 'Sí, falta el respeto', 'No, está bien'),
+  ('bardo-v3-pareja-ropa', 'Pareja y celos', 'active', 'neutral', '¿Criticar cómo se viste tu pareja es querer controlarla?', 'Sí, es control', 'No, es cuidar'),
+  ('bardo-v3-pareja-beso-boliche', 'Pareja y celos', 'active', 'neutral', '¿Un beso en un boliche estando de novio rompe para siempre la relación?', 'Sí, arruina todo', 'No, es un simple beso'),
+  ('bardo-v3-pareja-follows', 'Pareja y celos', 'active', 'neutral', '¿Seguir gente nueva estando en pareja es una falta de respeto?', 'Sí, es raro', 'No, sigo a quien quiero'),
+  ('bardo-v3-pareja-redes', 'Pareja y celos', 'active', 'neutral', '¿No subir nunca a tu pareja a redes significa que la escondés?', 'Sí, la escondés', 'No, no es obligación'),
+  ('bardo-v3-pareja-chats-ex', 'Pareja y celos', 'active', 'neutral', '¿Guardar chats con tu ex es no superar la relación?', 'Sí, aún la extrañas', 'No, es totalmente normal'),
+  ('bardo-v3-pareja-contrasenas', 'Pareja y celos', 'active', 'neutral', '¿Que tu novia/o pida compartir todas las contraseñas demuestra confianza?', 'Sí, la demuestra', 'No, es obsesión'),
+  ('bardo-v3-pareja-viaje-ex', 'Pareja y celos', 'active', 'neutral', '¿Invitar a una juntada a tu ex estando en pareja está mal?', 'Sí, pudre todo', 'No, es solo amistad'),
+  ('bardo-v3-pareja-mentira', 'Pareja y celos', 'active', 'neutral', '¿Mentir dónde estás para evitar una pelea sigue siendo mentir?', 'Sí, sigue siendo mentir', 'No, evita un problema'),
+  ('bardo-v3-pareja-ultima-conexion', 'Pareja y celos', 'active', 'neutral', '¿Mirar la última conexión de tu pareja es de controlador?', 'Sí, es tóxico', 'No, da tranquilidad'),
+  ('bardo-v3-pareja-historias', 'Pareja y celos', 'active', 'neutral', '¿Ocultar historias a tu pareja es peor que no subirlas?', 'Sí, es peor', 'No, es privado'),
+  ('bardo-v3-pareja-app-citas', 'Pareja y celos', 'reserve', 'neutral', '¿Tener una Tinder instalado estando en pareja cuenta como engañar?', 'Sí, es engañar', 'No, es solo una app'),
+  ('bardo-v3-pareja-borrar-redes', 'Pareja y celos', 'reserve', 'neutral', '¿Pedirle a tu pareja que borre a alguien de redes es control?', 'Sí, es control', 'No, es ser precavido'),
+  ('bardo-v3-pareja-like-ex', 'Pareja y celos', 'reserve', 'neutral', '¿Dar likes a fotos de tu ex teniendo pareja busca traerlo de vuelta?', 'Sí, busca algo', 'No, es un like nomás'),
+  ('bardo-v3-pareja-cancela-amigos', 'Pareja y celos', 'reserve', 'neutral', '¿Cancelar planes con amigos por una pelea de pareja está mal?', 'Sí, re de pollera', 'No, es entendible'),
+  ('bardo-v3-pareja-celular-dado-vuelta', 'Pareja y celos', 'reserve', 'neutral', '¿Dormir con el celular dado vuelta genera desconfianza?', 'Sí, genera desconfianza', 'No, es costumbre'),
+  ('bardo-v3-pareja-onda', 'Pareja y celos', 'reserve', 'neutral', '¿Seguir hablando con alguien con quien hubo onda mientras estás de novio está mal?', 'Sí, está pésimo', 'No, no significa nada'),
+  ('bardo-v3-pareja-intensa', 'Pareja y celos', 'reserve', 'neutral', '¿Decir “Con mi ex esto no pasaba” durante una discusión cuenta como respuesta?', 'Sí, impone respeto', 'No, se pudre todo'),
+  ('bardo-v3-pareja-volver-ex', 'Pareja y celos', 'reserve', 'neutral', '¿Volver con tu ex por segunda vez es elegir el mismo problema?', 'Sí, es de boludo', 'No, todos pueden cambiar'),
+  ('bardo-v3-citas-no-propone', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Después de dos semanas hablando todos los días, no proponer verse muestra falta de interés?', 'Sí, falta interés', 'No, es ir despacio nomás'),
+  ('bardo-v3-citas-madrugada', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Si te responde sólo de madrugada muestra que no sos prioridad?', 'Sí, sos segunda opción', 'No, es colgado nomás'),
+  ('bardo-v3-citas-like-viejo', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Dar like a una foto del 2018 es una forma de chamuyo?', 'Sí, re muestra interés en su perfil', 'No, queda rarazo'),
+  ('bardo-v3-citas-reaparece', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Volver con un “perdón, colgué” después de una semana merece justificación?', 'Sí, merece explicación', 'No, seguí como si nada'),
+  ('bardo-v3-citas-primera-cuenta', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Dividir la cuenta en una primera cita queda mal?', 'Sí, queda mal', 'No, es lo justo'),
+  ('bardo-v3-citas-tarde', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Llegar media hora tarde a una cita arruina el plan?', 'Sí, lo arruina', 'No, se espera'),
+  ('bardo-v3-citas-visto', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Dejar en visto es PEOR que decir "no me gustas"?', 'Sí, es peor clavar visto', 'No, es evitar lastimar'),
+  ('bardo-v3-citas-casa', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Invitarla a tu casa en la primera cita deja claro que solo te la querés garchar?', 'Sí, lo deja muy claro', 'No, totalmente normal'),
+  ('bardo-v3-citas-cancela', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Cancelar dos citas seguidas muestra que no hay interés?', 'Sí, no hay interés', 'No, se te puede complicar justo'),
+  ('bardo-v3-citas-varias-personas', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Hablar con varias personas a la vez mientras conocés a alguien está mal?', 'Sí, ya empezás mal', 'No, es normal'),
+  ('bardo-v3-citas-paga-todo', 'Chamuyo, citas y límites', 'active', 'neutral', '¿El hombre tiene que pagar todo en la primera cita?', 'Sí, es el mejor gesto', 'No, que la mujer aporte también'),
+  ('bardo-v3-citas-instagram', 'Chamuyo, citas y límites', 'archived', 'neutral', '¿Pedir Instagram antes seguir conociendo a alguien es ser superficial?', 'Sí, es elegir por fotos', 'No, es entendible'),
+  ('bardo-v3-citas-borracho', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Si te escribe borracho, muestra que siempre piensa en vos?', 'Sí, es un romántico', 'No, es para cojer nomás'),
+  ('bardo-v3-citas-foto-actual', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Pedir una foto actual antes de verse es superficial?', 'Sí, es superficial', 'No, es lógico'),
+  ('bardo-v3-citas-post-cita', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Dejar de responder después de la primera cita muestra que no le gustaste?', 'Sí, lo dejó en claro', 'No, está esperando otra invitación'),
+  ('bardo-v3-citas-reaparece-celos', 'Chamuyo, citas y límites', 'active', 'neutral', '¿Reaparecer cuando te ve con otra persona muestra celos?', 'Sí, muestra celos', 'No, es casualidad'),
+  ('bardo-v3-citas-quimica', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Decir “no quiero seguir con vos” es mejor que desaparecer?', 'Sí, es mejor', 'No, es frío'),
+  ('bardo-v3-citas-fluimos-hombre', 'Chamuyo, citas y límites', 'reserve', 'dirigida_a_hombres', '¿Cuando un hombre dice “fluimos”, está evitando comprometerse?', 'Sí, lo evita', 'No, va tranquilo'),
+  ('bardo-v3-citas-vemos-mujer', 'Chamuyo, citas y límites', 'reserve', 'dirigida_a_mujeres', '¿Cuando una mujer dice “vemos” hasta el mismo día, le chupa un huevo juntarse con vos?', 'Sí, te esquiva', 'No, todavía decide'),
+  ('bardo-v3-citas-fueguitos-hombre', 'Chamuyo, citas y límites', 'reserve', 'dirigida_a_hombres', '¿Si un hombre responde historias con fueguitos, cuenta como chamuyo?', 'Sí, está chamuyando', 'No, es poco esfuerzo'),
+  ('bardo-v3-citas-no-propone-mujer', 'Chamuyo, citas y límites', 'reserve', 'dirigida_a_mujeres', '¿Cuando una mujer acepta planes pero nunca propone uno, muestra poco interés?', 'Sí, muestra poco interés', 'No, es su forma de ser'),
+  ('bardo-v3-citas-paga-hombre', 'Chamuyo, citas y límites', 'reserve', 'dirigida_a_hombres', '¿Que él pague una salida significa que espera algo a cambio?', 'Sí, quiere ir a un telo', 'No, es un gesto dulce'),
+  ('bardo-v3-citas-paga-mujer', 'Chamuyo, citas y límites', 'reserve', 'dirigida_a_mujeres', '¿Si ella sugiere pagar la mitad, el hombre debe aceptar o pagar todo él?', 'Sí, está bueno dejarla pagar', 'No, es de caballero negarse'),
+  ('bardo-v3-citas-cara', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿El que te invita a un lugar caro, siempre tiene prioridad sobre el pibe con buenas intenciones que te lleva al parque?', 'Sí, se merece más', 'No, la plata no es todo'),
+  ('bardo-v3-citas-ex', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Seguir hablando con tu ex mientras conocés a alguien está mal?', 'Sí, está mal', 'No, no hay exclusividad'),
+  ('bardo-v3-amigos-chaparse', 'Amistades y códigos', 'active', 'neutral', '¿Chaparse a alguien que le gusta a tu amigo es traición?', 'Sí, es traición', 'No, le pasa por no activar'),
+  ('bardo-v3-amigos-ex', 'Amistades y códigos', 'active', 'neutral', '¿Salir con la ex de un amigo está mal aunque hayan pasado años?', 'Sí, está mal', 'No, ya fue'),
+  ('bardo-v3-amigos-secreto', 'Amistades y códigos', 'active', 'neutral', '¿Contarle un secreto del grupo a tu pareja rompe un código?', 'Sí, es de gobernado', 'No, es lo normal'),
+  ('bardo-v3-amigos-engano', 'Amistades y códigos', 'active', 'neutral', '¿Si sabés que engañan a tu amiga/o, deberías decírselo?', 'Sí, hay que decirlo', 'No, no te metas'),
+  ('bardo-v3-amigos-defender', 'Amistades y códigos', 'active', 'neutral', '¿Defender a un amigo/a aunque esté equivocado es ser falso?', 'Sí, es ser falso', 'No, a los hermanos se los defiende'),
+  ('bardo-v3-amigos-desaparece', 'Amistades y códigos', 'active', 'neutral', '¿Desaparecer por una pareja es ser una basura con tus amigos?', 'Sí, merece castigo', 'No, es lo normal'),
+  ('bardo-v3-amigos-vuelve', 'Amistades y códigos', 'active', 'neutral', '¿Volver al grupo después de meses te devuelve el mismo lugar?', 'Sí, lo devuelve', 'No, no lo devuelve'),
+  ('bardo-v3-amigos-extra', 'Amistades y códigos', 'active', 'neutral', '¿Llevar a alguien nuevo a una juntada sin avisar está mal?', 'Sí, está mal', 'No, se lo integra igual'),
+  ('bardo-v3-amigos-hablar-mal', 'Amistades y códigos', 'active', 'neutral', '¿Hablar mal de un amigo con todos menos con él es cobardía?', 'Sí, es cobardía', 'No, es descargarse'),
+  ('bardo-v3-amigos-pelea-pareja', 'Amistades y códigos', 'active', 'neutral', '¿Si tu amigo se pelea con su pareja, tenés que tomar partido?', 'Sí, hay que tomar partido', 'No, no hay que hacerlo'),
+  ('bardo-v3-amigos-favores', 'Amistades y códigos', 'active', 'neutral', '¿Un amigo que sólo aparece para pedir favores sigue siendo amigo?', 'Sí, sigue siendo amigo', 'No, se aprovecha'),
+  ('bardo-v3-amigos-cumple', 'Amistades y códigos', 'active', 'neutral', '¿Olvidarte el cumpleaños de un amigo merece más que un sticker?', 'Sí, merece más', 'No, alcanza'),
+  ('bardo-v3-amigos-deuda', 'Amistades y códigos', 'active', 'neutral', '¿Cobrarle una deuda a un amigo delante del grupo está mal?', 'Sí, está mal', 'No, hay que cobrar'),
+  ('bardo-v3-amigos-subgrupo', 'Amistades y códigos', 'active', 'neutral', '¿Armar un grupo aparte para una salida deja gente afuera?', 'Sí, la deja afuera', 'No, organiza mejor'),
+  ('bardo-v3-amigos-inseguridad', 'Amistades y códigos', 'active', 'neutral', '¿Hacer chistes con una inseguridad de un amigo es humor?', 'Sí, es humor', 'No, es mala leche'),
+  ('bardo-v3-amigos-ex-mejor-amigo', 'Amistades y códigos', 'active', 'neutral', '¿Si tu mejor amigo se hace amigo de tu ex, se está yendo al carajo?', 'Sí, mucho', 'No, se puede'),
+  ('bardo-v3-amigos-mudanza', 'Amistades y códigos', 'reserve', 'neutral', '¿No ayudar en una mudanza te quita derecho a pedir ayuda después?', 'Sí, te lo quita', 'No, no tiene relación'),
+  ('bardo-v3-redes-historia-visto', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Subir una historia mientras dejás un mensaje en visto es ignorar a propósito?', 'Sí, es a propósito', 'No, no tiene relación'),
+  ('bardo-v3-redes-indirectas', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Tirar indirectas por historias es no animarse a hablar de frente?', 'Sí, no se anima', 'No, cuenta como chamuyo'),
+  ('bardo-v3-redes-capturas', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Mandar capturas de un chat al grupo está mal aunque tengas razón?', 'Sí, está mal', 'No, sirve de prueba'),
+  ('bardo-v3-redes-cuenta-falsa', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Tener una cuenta falsa para mirar gente es una red flag?', 'Sí, es red flag', 'No, es curiosidad'),
+  ('bardo-v3-redes-mejores-amigos', 'WhatsApp, Instagram, privacidad y redes', 'active', 'archive', '¿Sacar a alguien de mejores amigos después de una pelea es un mensaje?', 'Sí, es un mensaje', 'No, no significa nada'),
+  ('bardo-v3-redes-comentario', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Borrar un comentario genera más sospecha que dejarlo?', 'Sí, genera sospecha', 'No, evita quilombo'),
+  ('bardo-v3-redes-likes', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Dar likes a todas las historias es buen método de chamuyo?', 'Sí, re cuenta', 'No, muy desesperado'),
+  ('bardo-v3-redes-foto', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Subir una foto donde el otro sale para el *rto está mal?', 'Sí, lo re escrachas', 'No, es tu foto'),
+  ('bardo-v3-redes-memes', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Mandar memes en medio de una pelea es esquivar el conflicto?', 'Sí, lo esquiva', 'No, baja un poco la tensión'),
+  ('bardo-v3-redes-historia-mensajes', 'WhatsApp, Instagram, privacidad y redes', 'active', 'archive', '¿Mirar quién vio tu historia antes de responder mensajes es jugar con alguien?', 'Sí, es jugar', 'No, es normal'),
+  ('bardo-v3-redes-ultima-conexion', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Ocultar la última conexión es hacerse el importante?', 'Sí, se hace el ocupado', 'No, da privacidad'),
+  ('bardo-v3-redes-audio-privado', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Reenviar un audio privado para ganar una discusión es jugar sucio?', 'Sí, juega sucio', 'No, muestra pruebas'),
+  ('bardo-v3-redes-indirecta-destino', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Subir una indirecta y negar que tiene destinatario es mentir?', 'Sí, es mentir', 'No, es descargarse'),
+  ('bardo-v3-redes-historia-vistas', 'WhatsApp, Instagram, privacidad y redes', 'active', 'neutral', '¿Borrar una historia por pocas vistas muestra que publicás solo por atención?', 'Sí, esperaba reacción', 'No, se puede cambiar de idea'),
+  ('bardo-v3-redes-ex-perfil', 'WhatsApp, Instagram, privacidad y redes', 'reserve', 'neutral', '¿Mirar todos los días el perfil de la nueva pareja de tu ex muestra que no superaste?', 'Sí, no superaste', 'No, es curiosidad'),
+  ('bardo-v3-gym-ropa-ajustada', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Ir al gym con ropa muy ajustada es buscar que te miren?', 'Sí, busca miradas', 'No, visto lo que me gusta'),
+  ('bardo-v3-gym-entrenamientos', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Subir cada entrenamiento busca mostrarse más que motivar?', 'Sí, busca mostrarse', 'No, busca motivar'),
+  ('bardo-v3-gym-filmar', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Filmarse en el gym cuando hay gente atrás es joder al resto?', 'Sí, está re mal', 'No, no molesta a nadie'),
+  ('bardo-v3-gym-consejos', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Dar consejos de gym sin que te los pidan es creérsela?', 'Sí, quiere figurar', 'No, quiere ayudar'),
+  ('bardo-v3-gym-remera', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Sacarse la remera para entrenar es para que te miren?', 'Sí, es para eso', 'No, es comodidad'),
+  ('bardo-v3-gym-foto-serie', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Tardar más sacándose fotos que haciendo una serie muestra vas al gym por puro caretaje?', 'Sí, totalmente', 'No, es una forma de descanso'),
+  ('bardo-v3-gym-perfume', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Ir perfumado al gym también es ir a levantarse gente?', 'Sí, es para levantar', 'No, es higiene'),
+  ('bardo-v3-gym-tecnica', 'Gym, imagen, ropa y validación', 'active', 'archive', '¿Corregir la técnica ajena sin permiso es agrandarse?', 'Sí, es agrandarse', 'No, es ayudar'),
+  ('bardo-v3-gym-cambio-fisico', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Subir fotos mostrando un cambio físico es buscar aprobación/atención?', 'Sí, busca aprobación', 'No, comparte progreso'),
+  ('bardo-v3-gym-dos-maquinas', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Usar dos máquinas al mismo tiempo está mal?', 'Sí, jode al resto', 'No, ahorra tiempo'),
+  ('bardo-v3-gym-levantar', 'Gym, imagen, ropa y validación', 'active', 'revisar', '¿Vestirse para levantar en el gym está mal?', 'Sí, está mal', 'No, no tiene nada malo'),
+  ('bardo-v3-gym-cuerpo', 'Gym, imagen, ropa y validación', 'active', 'neutral', '¿Halagar el físico de alguien en el gym está mal aunque sea un elogio?', 'Sí, está mal', 'No, es un cumplido'),
+  ('bardo-v3-salidas-cuenta', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Pedir lo más caro y dividir igual es aprovecharse?', 'Sí, se aprovecha', 'No, es la cuenta'),
+  ('bardo-v3-salidas-pone-mas', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿El que pone más plata debería decidir más?', 'Sí, debería decidir', 'No, se vota igual'),
+  ('bardo-v3-salidas-deuda', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Cobrar una deuda chica delante de todos es humillar?', 'Sí, humilla', 'No, hay que cobrar'),
+  ('bardo-v3-salidas-prestado', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Que te inviten a salir y elegir un lugar caro está mal?', 'Sí, está mal', 'No, puede elegir lo que quiera'),
+  ('bardo-v3-salidas-tarde-hielo', 'Salidas, previa, boliche y plata', 'active', 'revisar', '¿El que llega tarde a la juntada debería poner más guita qu?', 'Sí, debería poner', 'No, no compensa'),
+  ('bardo-v3-salidas-cancelar', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Cancelar al grupo el mismo día debería justificar que te ghosteen?', 'Sí, debería', 'No, es demasiado'),
+  ('bardo-v3-salidas-extra', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Caer con gente extra sin avisar arruina el plan?', 'Sí, lo arruina', 'No, no cambia nada'),
+  ('bardo-v3-salidas-temprano', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Irse antes de las 4 del boliche es no bancarse la joda?', 'Sí, no se la banca', 'No, es entendible'),
+  ('bardo-v3-salidas-propina', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿No dejar propina en el bar es de ratón?', 'Sí, de ratonazo', 'No, depende el mozo'),
+  ('bardo-v3-salidas-bar-caro', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Elegir un bar caro sabiendo que alguien no llega es de hdp?', 'Sí, es mala leche', 'No, el que puede puede'),
+  ('bardo-v3-salidas-casa', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿El que nunca pone casa puede quejarse del lugar?', 'Sí, puede quejarse', 'No, que cierre el *rto'),
+  ('bardo-v3-salidas-ronda', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Bajarse la primera birra antes que llegue la pizza es de alcohólico?', 'Sí, alcohólico mal', 'No, se la banca'),
+  ('bardo-v3-salidas-vuelto', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Quedarse con el vuelto de una compra grupal es hacerse el vivo?', 'Sí, se hace el vivo', 'No, compensa gastos'),
+  ('bardo-v3-vida-tp', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿El que no hizo nada en un trabajo grupal merece figurar?', 'Sí, merece figurar', 'No, hay que echarlo a patadas'),
+  ('bardo-v3-vida-ia', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Usar IA para hacer todo un trabajo cuenta como hacer el trabajo?', 'Sí, cuenta', 'No, no cuenta'),
+  ('bardo-v3-vida-urgente', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Mandar algo a las doce de la noche es alterar la paz del grupo?', 'Sí, es romper las bolas', 'No, capaz se justifica'),
+  ('bardo-v3-vida-apuntes', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Pedir apuntes sin figurar nunca en clases es aprovecharse?', 'Sí, se aprovecha', 'No, el grupo tiene que bancar'),
+  ('bardo-v3-vida-cocina', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿El que cocina debería quedar libre de lavar platos?', 'Sí, debería quedar libre', 'No, lava todo igual'),
+  ('bardo-v3-vida-platos', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Dejar platos en remojo cuenta como lavarlos?', 'Sí, cuenta', 'No, no cuenta'),
+  ('bardo-v3-vida-home-office', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Hacer home office permite desaparecer todo el día?', 'Sí, lo permite', 'No, hay que responder'),
+  ('bardo-v3-vida-corregir', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿El que no apareció en el trabajo grupal puede tirar correcciones al final?', 'Sí, puede corregir', 'No, mejor que haga silencio'),
+  ('bardo-v3-vida-itinerario', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'revisar', '¿Armar un viaje minuto a minuto arruina el viaje?', 'Sí, lo arruina', 'No, evita caos'),
+  ('bardo-v3-vida-excursion', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Llegar tarde al partido debería hacerte poner más plata?', 'Sí, debería costar', 'No, no corresponde'),
+  ('bardo-v3-vida-vacaciones', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Despertar temprano a todos en vacaciones es de rompe huevos?', 'Sí, está mal', 'No, hay que aprovechar el día'),
+  ('bardo-v3-vida-renunciar', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'active', 'neutral', '¿Renunciar sin tener otro trabajo es irresponsable?', 'Sí, es irresponsable', 'No, hay que animarse'),
+  ('bardo-v3-pareja-novia-salir-hombre', 'Pareja y celos', 'reserve', 'dirigida_a_hombres', '¿Cuando un hombre exige que su novia no salga, está siendo controlador?', 'Sí, es controlador', 'No, pone un límite'),
+  ('bardo-v3-pareja-exclusividad-ex-mujer', 'Pareja y celos', 'reserve', 'dirigida_a_mujeres', '¿Cuando una mujer pide exclusividad pero sigue hablando con el ex, está cagando al novio?', 'Sí, pide ventajas', 'No, no tiene relación'),
+  ('bardo-v3-pareja-exes-hombre', 'Pareja y celos', 'reserve', 'dirigida_a_hombres', '¿Cuando un hombre dice que todas sus ex están locas, suele ocultar su parte?', 'Sí, la oculta', 'No, tuvo mala suerte'),
+  ('bardo-v3-pareja-vuelve-celos-mujer', 'Pareja y celos', 'reserve', 'dirigida_a_mujeres', '¿Cuando una mujer vuelve justo al verte con otra, vuelve por celos?', 'Sí, vuelve por celos', 'No, cambio de opinión'),
+  ('bardo-v3-pareja-ropa-hombre', 'Pareja y celos', 'reserve', 'dirigida_a_hombres', '¿Cuando un hombre se enoja por la ropa de su pareja, busca controlarla?', 'Sí, busca controlarla', 'No, cuida la relación'),
+  ('bardo-v3-pareja-instagram-ex-mujer', 'Pareja y celos', 'reserve', 'dirigida_a_mujeres', '¿Cuando una mujer revisa todo el Instagram de su ex, demuestra que no lo superó?', 'Sí, no lo superó', 'No, es curiosidad'),
+  ('bardo-v3-pareja-hablar-otra-persona', 'Pareja y celos', 'reserve', 'neutral', '¿Pedirle a tu pareja que deje de hablar con alguien es controlar?', 'Sí, es controlar', 'No, es marcar un límite'),
+  ('bardo-v3-salidas-sin-pareja', 'Salidas, previa, boliche y plata', 'active', 'neutral', '¿Una salida de amigos sin pareja debería poder hacerse sin drama?', 'Sí, debería poder', 'No, trae problemas'),
+  ('bardo-v3-amigos-ocultan-grupo', 'Amistades y códigos', 'reserve', 'neutral', '¿Si te ocultan algo del grupo de amigos, significa que no te toman en serio?', 'Sí, no te toman en serio', 'No, es por precaución'),
+  ('bardo-v3-amigos-yo-soy-asi', 'Amistades y códigos', 'reserve', 'neutral', '¿Decir “yo soy así” después de lastimar a alguien es ser terrible forro?', 'Sí, forrazo mal', 'No, es sinceridad'),
+  ('bardo-v3-pareja-coquetea-instagram', 'Pareja y celos', 'reserve', 'neutral', '¿Si tu pareja se chamuya a alguien por Tinder, cuenta como engaño?', 'Sí, está engañando', 'No, no cuenta'),
+  ('bardo-v3-pareja-plan-b', 'Pareja y celos', 'reserve', 'neutral', '¿Tener un “plan B” mientras estás en pareja es infidelidad?', 'Sí, absolutamente', 'No, es ser prevenido'),
+  ('bardo-v4-deporte-messi-arruino-su-reputacion-perdiendo-la-final', 'Deporte, competencia y fandom', 'reserve', 'neutral', '¿Messi arruinó su reputación perdiendo la final 2026?', 'Sí, se hubiera retirado antes', 'No, perdió con la frente en alto'),
+  ('bardo-v4-sociedad-deberian-permitir-la-pena-de-muerte-a', 'Sociedad, identidad y debate público', 'reserve', 'neutral', '¿Deberían permitir la pena de muerte a violadores en Argentina?', 'Sí, se justificaría', 'No, sigue siendo inhumano'),
+  ('bardo-v4-sociedad-las-mujeres-pueden-hacer-varias-tareas-a', 'Sociedad, identidad y debate público', 'reserve', 'neutral', '¿Las mujeres pueden hacer varias tareas a la vez, el hombre no?', 'Sí, son multitasking', 'No, el hombre también puede'),
+  ('bardo-v4-sociedad-el-hombre-es-mil-veces-mejor-al', 'Sociedad, identidad y debate público', 'reserve', 'neutral', '¿El hombre es mil veces mejor al volante que una mujer?', 'Sí, totalmente', 'No, al contrario'),
+  ('bardo-v4-pareja-casarse-esta-muy-pasado-de-moda', 'Pareja y celos', 'reserve', 'neutral', '¿Casarse está muy pasado de moda?', 'Sí, totalmente', 'No, nada que ver'),
+  ('bardo-v4-pareja-regalarle-flores-a-tu-novia-es-muy', 'Pareja y celos', 'reserve', 'neutral', '¿Regalarle flores a tu novia es muy cursi?', 'Sí, muy', 'No, re romántico'),
+  ('bardo-v4-citas-el-hombre-solo-se-rie-de-los', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿El hombre solo se ríe de los chistes de una mujer cuando se la quiere garchar?', 'Sí, la única forma', 'No, le dio risa posta'),
+  ('bardo-v4-sociedad-el-hombre-es-naturalmente-mas-aburrido-que', 'Sociedad, identidad y debate público', 'reserve', 'neutral', '¿El hombre es naturalmente más aburrido que la mujer?', 'Sí, mucho más', 'No, al contrario'),
+  ('bardo-v4-amistades-existe-realmente-la-amistad-entre-hombre-y', 'Amistades y códigos', 'reserve', 'neutral', '¿Existe realmente la amistad entre hombre y mujer, o siempre uno de los dos quiere algo más?', 'Sí, existe la amistad pura', 'No, siempre uno quiere garchar'),
+  ('bardo-v4-amistades-el-grupo-de-amigos-se-prioriza-antes', 'Amistades y códigos', 'reserve', 'neutral', '¿El grupo de amigos se prioriza antes que la pareja siempre?', 'Sí, totalmente', 'No, mi pareja primero'),
+  ('bardo-v4-citas-como-hombre-saldrias-con-una-mujer-que', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Como hombre saldrías con una mujer que pese más que vos?', 'Sí, totalmente', 'No, ni a palo'),
+  ('bardo-v4-citas-como-mujer-saldrias-con-una-hombre-mas', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Como mujer saldrías con una hombre más bajo que vos?', 'Sí, totalmente', 'No, ni loca'),
+  ('bardo-v4-citas-18-y-25-anos-es-una-brecha', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿18 y 25 años es una brecha de edad muy grande para una pareja?', 'Sí, totalmente', 'No, está ahí nomás'),
+  ('bardo-v4-pareja-se-justifica-posponer-un-sueno-meta-por', 'Pareja y celos', 'reserve', 'neutral', '¿Se justifica posponer un sueño/meta por darle importancia a tu pareja?', 'Sí, totalmente', 'No, nunca se justifica'),
+  ('bardo-v4-sociedad-deberian-los-hombres-animarse-a-mostrar-su', 'Sociedad, identidad y debate público', 'reserve', 'neutral', '¿Deberían los hombres animarse a mostrar su lado más vulnerable?', 'Sí, totalmente', 'No, que se la banquen'),
+  ('bardo-v4-citas-que-es-mas-satisfactorio-tener-o-provocar', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Qué es más satisfactorio tener o provocar un orgasmo?', 'tener', 'provocar'),
+  ('bardo-v4-citas-que-preferis-dejar-o-que-te-dejen', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Qué preferís dejar o que te dejen?', 'Sí, totalmente', 'No, que se la banquen'),
+  ('bardo-v4-valores-que-es-mejor-cumplir-tu-mayor-deseo', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Qué es mejor cumplir tu mayor deseo o resolver tu mayor arrepentimiento?', 'cumplir mi deseo', 'resolver mi problema'),
+  ('bardo-v4-citas-es-peor-que-tus-viejos-te-encuentren', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Es peor que tus viejos te encuentren garchando, o que vos encuentres garchando a tus viejos?', 'peor que me encuentren', 'peor verlos a mis viejos en bolas'),
+  ('bardo-v4-citas-cojerse-a-la-persona-que-tenes-al', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Cojerse a la persona que tenés al lado o no cojer nunca más?', 'al de al lado', 'No garcho masss'),
+  ('bardo-v4-sociedad-hombre-hetero-que-gime-durante-el-sexo', 'Sociedad, identidad y debate público', 'reserve', 'neutral', '¿Hombre hetero que gime durante el sexo se puede seguir considerando hombre?', 'Sí, es más sentimental', 'No, muy maric*n'),
+  ('bardo-v4-salidas-decir-que-sos-vegano-vegetariano-en-pleno', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Decir que sos vegano/vegetariano en pleno asado arruina el ambiente de la juntada?', 'Sí, totalmente', 'No, está avisando nomás'),
+  ('bardo-v4-salidas-tomar-mate-dulce-es-mejor-que-amargo', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Tomar mate dulce es mejor que amargo, pero nadie quiere admitirlo por miedo a bullying?', 'Sí, es mil veces más rico', 'No, deja de ser mate'),
+  ('bardo-v4-vida-copiarse-en-un-parcial-se-justifica-si', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Copiarse en un parcial se justifica si el profe explica como el re *rto?', 'Sí, absolutamente', 'No, sigue siendo deshonesto'),
+  ('bardo-v4-amistades-esta-bien-inventar-una-excusa-para-no', 'Amistades y códigos', 'reserve', 'neutral', '¿Está bien inventar una excusa para no juntarte con alguien?', 'Sí, absolutamente', 'No, mejor decir la verdad'),
+  ('bardo-v4-valores-si-nadie-se-entera-de-una-cagada', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Si nadie se entera de una cagada que te mandaste, sigue estando mal?', 'Sí, para atrás', 'No, sin pelito no hay delito'),
+  ('bardo-v4-valores-esta-mal-priorizarse-a-uno-mismo-aunque', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Está mal priorizarse a uno mismo aunque decepciones a alguien?', 'Sí, no justifica', 'No, la prioridad es uno mismo'),
+  ('bardo-v4-valores-perdonar-una-traicion-te-hace-maduro-o', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Perdonar una traición te hace maduro o débil?', 'sumamente maduro', 'quedas como un débil'),
+  ('bardo-v4-valores-ser-brutalmente-honesto-con-alguien-es-ser', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Ser brutalmente honesto con alguien, es ser forro aunque tengas razón?', 'Sí, muy forro igual', 'No, lo haces por su bien'),
+  ('bardo-v4-deporte-el-que-se-enoja-por-perder-en', 'Deporte, competencia y fandom', 'reserve', 'neutral', '¿El que se enoja por perder en un partido/juego muestra inmadurez?', 'Sí, le falta madurez', 'No, se lo entiende'),
+  ('bardo-v4-citas-sexo-entre-amigos-fortalece-la-amistad', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Sexo entre amigos fortalece la amistad?', 'Sí, la re fortalece', 'No, caga todo'),
+  ('bardo-v4-citas-cuando-un-hombre-se-mete-en-el', 'Chamuyo, citas y límites', 'reserve', 'neutral', '¿Cuando un hombre se mete en el tarot, suele ser para chamuyarse más fácil a una mujer?', 'Sí, es ser estratégico', 'No, le interesa posta'),
+  ('bardo-v4-amistades-invitar-a-alguien-por-compromiso-es-peor', 'Amistades y códigos', 'reserve', 'neutral', '¿Invitar a alguien por compromiso es peor que no invitarlo?', 'Sí, se nota y queda peor.', 'No, la intención vale.'),
+  ('bardo-v4-amistades-desaparecer-del-grupo-por-estar-de-novio', 'Amistades y códigos', 'reserve', 'neutral', '¿Desaparecer del grupo por estar de novio te baja de categoría como amigo?', 'Sí, abandonó al grupo.', 'No, tiene otras prioridades.'),
+  ('bardo-v4-salidas-pedir-lo-mas-caro-y-dividir-todo', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Pedir lo más caro y dividir todo por igual es hacerse el boludo?', 'Sí, se aprovecha.', 'No, se divide y listo.'),
+  ('bardo-v4-salidas-no-dejar-propina-cuando-el-servicio-fue', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿No dejar propina cuando el servicio fue mediocre es de rata?', 'Sí, hay que dejar algo.', 'No, no es obligatoria.'),
+  ('bardo-v4-salidas-cancelar-un-plan-el-mismo-dia-habilita', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Cancelar un plan el mismo día habilita al grupo a dejar de invitarte?', 'Sí, si lo repetís.', 'No, se puede complicar.'),
+  ('bardo-v4-redes-mandar-un-audio-de-mas-de-tres', 'WhatsApp, Instagram, privacidad y redes', 'reserve', 'neutral', '¿Mandar un audio de más de tres minutos es una falta de respeto?', 'Sí, resumí un poco.', 'No, se escucha en dos partes.'),
+  ('bardo-v4-vida-llegar-temprano-a-todo-es-ser-responsable', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Llegar temprano a todo es ser responsable o intenso?', 'Responsable.', 'Intenso.'),
+  ('bardo-v4-vida-dormir-siesta-todos-los-dias-es-aprovechar', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Dormir siesta todos los días es aprovechar la vida o perderla?', 'Aprovecharla.', 'Perderla.'),
+  ('bardo-v4-vida-el-que-no-sabe-cocinar-deberia-aprender', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿El que no sabe cocinar debería aprender antes de vivir solo?', 'Sí, es básico.', 'No, se aprende después.'),
+  ('bardo-v4-valores-ser-fanatico-de-algo-al-extremo-siempre', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Ser fanático de algo al extremo siempre termina siendo insoportable?', 'Sí, se pone denso.', 'No, tener pasión está bueno.'),
+  ('bardo-v4-amistades-un-amigo-que-siempre-llega-tarde-merece', 'Amistades y códigos', 'reserve', 'neutral', '¿Un amigo que siempre llega tarde merece que le mientan la hora?', 'Sí, se lo ganó.', 'No, es de mala leche'),
+  ('bardo-v4-amistades-el-que-desaparece-meses-y-vuelve-con', 'Amistades y códigos', 'reserve', 'neutral', '¿El que desaparece meses y vuelve con un “¿qué hacen?” puede retomar como si nada?', 'Sí, es amigo igual.', 'No, ya perdió el lugar.'),
+  ('bardo-v4-salidas-el-que-pide-delivery-para-todos-deberia', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿El que pide delivery para todos debería encargarse de cobrar?', 'Sí, él armó el quilombo.', 'No, cada uno se hace cargo.'),
+  ('bardo-v4-salidas-quedarse-con-el-cambio-de-una-compra', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Quedarse con el cambio de una compra grupal es robar o compensar molestias?', 'Robar, obvio.', 'Compensar molestias.'),
+  ('bardo-v4-salidas-el-que-propone-un-lugar-caro-deberia', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿El que propone un lugar caro debería adaptarse al presupuesto del resto?', 'Sí, si no que vaya solo.', 'No, que se cague el resto por pobres'),
+  ('bardo-v4-salidas-llevar-tu-propia-bebida-a-una-previa', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Llevar tu propia bebida a una previa es colaborar o ser rata?', 'Colaborar.', 'Ser rata.'),
+  ('bardo-v4-salidas-irse-sin-despedirte-para-no-hacer-escandalo', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Irse sin despedirte para no hacer escándalo está mal?', 'Sí, es de fantasma.', 'No, es más práctico.'),
+  ('bardo-v4-redes-reaccionar-con-jajaja-a-un-problema-serio', 'WhatsApp, Instagram, privacidad y redes', 'reserve', 'neutral', '¿Reaccionar con “jajaja” a un problema serio es no saber defenderte?', 'Sí, medio cagón.', 'No, baja la tensión.'),
+  ('bardo-v4-redes-tener-500-notificaciones-sin-leer-es-ser', 'WhatsApp, Instagram, privacidad y redes', 'reserve', 'neutral', '¿Tener 500 notificaciones sin leer es ser importante o hacerse el importante?', 'Importante.', 'creérsela'),
+  ('bardo-v4-redes-mandar-un-tiktok-sin-contexto-es-una', 'WhatsApp, Instagram, privacidad y redes', 'reserve', 'neutral', '¿Mandar un TikTok sin contexto es una forma válida de hablar?', 'Sí, comunica todo.', 'No, poné aunque sea un texto.'),
+  ('bardo-v4-gym-editar-demasiado-una-foto-antes-de-subirla', 'Gym, imagen, ropa y validación', 'reserve', 'neutral', '¿Editar demasiado una foto antes de subirla es cuidarse o mentir?', 'Cuidarse.', 'Mentir.'),
+  ('bardo-v4-vida-llegar-sin-leer-la-consigna-y-preguntar', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Llegar sin leer la consigna y preguntar “qué había que hacer” merece ignorada?', 'Sí, que lea.', 'No, se ayuda igual.'),
+  ('bardo-v4-vida-dormir-hasta-tarde-un-domingo-es-descansar', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Dormir hasta tarde un domingo es descansar o desperdiciar el día?', 'Descansar.', 'Desperdiciarlo.'),
+  ('bardo-v4-vida-tener-la-pieza-desordenada-dice-algo-de', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Tener la pieza desordenada dice algo de cómo tenés la cabeza?', 'Sí, re dice.', 'No tiene nada que ver.'),
+  ('bardo-v4-valores-cambiar-de-opinion-seguido-es-madurar-o', 'Valores, decisiones y dilemas personales', 'reserve', 'neutral', '¿Cambiar de opinión seguido es madurar o no saber lo que querés?', 'Madurar.', 'No saber qué querés.'),
+  ('bardo-v4-vida-dejar-la-ropa-sobre-la-silla-cuenta', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Dejar la ropa sobre la silla cuenta como tener la pieza ordenada?', 'Sí, está acomodada.', 'No, es una montaña con excusas.'),
+  ('bardo-v4-vida-el-que-pone-musica-fuerte-en-la', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿El que pone música fuerte en la casa debería aceptar cualquier queja?', 'Sí, que se haga cargo.', 'No, una casa no es una biblioteca.'),
+  ('bardo-v4-salidas-llegar-cinco-minutitos-tarde-siempre-termina-siendo', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Llegar “cinco minutitos tarde” siempre termina siendo una falta de respeto?', 'Sí, hacés perder tiempo.', 'No, tampoco es tan grave.'),
+  ('bardo-v4-vida-usar-el-bano-mas-de-media-hora', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Usar el baño más de media hora cuando vivís con otros es egoísta?', 'Sí, liberá el lugar.', 'No, cada uno tarda lo que tarda.'),
+  ('bardo-v4-vida-pedir-wi-fi-apenas-llegas-a-una', 'Convivencia, facultad, trabajo, viajes y vida adulta', 'reserve', 'neutral', '¿Pedir Wi‑Fi apenas llegás a una casa queda mal?', 'Sí, saludá primero.', 'No, es una necesidad básica.'),
+  ('bardo-v4-salidas-poner-mayonesa-a-todo-arruina-la-comida', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Poner mayonesa a todo arruina la comida?', 'Sí, tapa todos los sabores.', 'No, mejora casi todo.'),
+  ('bardo-v4-salidas-comer-la-ultima-porcion-sin-preguntar-es', 'Salidas, previa, boliche y plata', 'reserve', 'neutral', '¿Comer la última porción sin preguntar es traición?', 'Sí, se pregunta.', 'No, el que llega primero gana.'),
+  ('bardo-v4-deporte-el-que-reclama-todas-las-faltas-en', 'Deporte, competencia y fandom', 'reserve', 'neutral', '¿El que reclama todas las faltas en fútbol 5 arruina el partido?', 'Sí, mariconaz*', 'No, hay que cobrar bien.'),
+  ('bardo-v4-deporte-perder-por-goleada-y-decir-era-para', 'Deporte, competencia y fandom', 'reserve', 'neutral', '¿Perder por goleada y decir “era para divertirnos” es una excusa?', 'Sí, le dolió perder.', 'No, no todo es ganar.'),
+  ('bardo-v4-gym-ir-al-gimnasio-sin-entrenar-piernas-es', 'Gym, imagen, ropa y validación', 'reserve', 'neutral', '¿Ir al gimnasio sin entrenar piernas es entrenar a medias?', 'Sí, no cuenta completo.', 'No, cada uno entrena lo que quiere.')
+)
+insert into public.prompts(id, category, intensity, status, audience_type, text, side_a, side_b)
+select id, category, 'bardo', status, audience_type, text, side_a, side_b
+from desired
+on conflict (id) do update set
+  category = excluded.category,
+  intensity = excluded.intensity,
+  status = excluded.status,
+  audience_type = excluded.audience_type,
+  text = excluded.text,
+  side_a = excluded.side_a,
+  side_b = excluded.side_b;
+
+-- Todo Bardo fuera del catálogo normalizado queda preservado, pero archivado.
+with desired(id) as (
+  values
+  ('bardo-v3-pareja-ubicacion'),
+  ('bardo-v3-pareja-ex-diario'),
+  ('bardo-v3-pareja-fotos-sugerentes'),
+  ('bardo-v3-pareja-celular'),
+  ('bardo-v3-pareja-mejores-amigos'),
+  ('bardo-v3-pareja-fines-semana'),
+  ('bardo-v3-pareja-ropa'),
+  ('bardo-v3-pareja-beso-boliche'),
+  ('bardo-v3-pareja-follows'),
+  ('bardo-v3-pareja-redes'),
+  ('bardo-v3-pareja-chats-ex'),
+  ('bardo-v3-pareja-contrasenas'),
+  ('bardo-v3-pareja-viaje-ex'),
+  ('bardo-v3-pareja-mentira'),
+  ('bardo-v3-pareja-ultima-conexion'),
+  ('bardo-v3-pareja-historias'),
+  ('bardo-v3-pareja-app-citas'),
+  ('bardo-v3-pareja-borrar-redes'),
+  ('bardo-v3-pareja-like-ex'),
+  ('bardo-v3-pareja-cancela-amigos'),
+  ('bardo-v3-pareja-celular-dado-vuelta'),
+  ('bardo-v3-pareja-onda'),
+  ('bardo-v3-pareja-intensa'),
+  ('bardo-v3-pareja-volver-ex'),
+  ('bardo-v3-citas-no-propone'),
+  ('bardo-v3-citas-madrugada'),
+  ('bardo-v3-citas-like-viejo'),
+  ('bardo-v3-citas-reaparece'),
+  ('bardo-v3-citas-primera-cuenta'),
+  ('bardo-v3-citas-tarde'),
+  ('bardo-v3-citas-visto'),
+  ('bardo-v3-citas-casa'),
+  ('bardo-v3-citas-cancela'),
+  ('bardo-v3-citas-varias-personas'),
+  ('bardo-v3-citas-paga-todo'),
+  ('bardo-v3-citas-instagram'),
+  ('bardo-v3-citas-borracho'),
+  ('bardo-v3-citas-foto-actual'),
+  ('bardo-v3-citas-post-cita'),
+  ('bardo-v3-citas-reaparece-celos'),
+  ('bardo-v3-citas-quimica'),
+  ('bardo-v3-citas-fluimos-hombre'),
+  ('bardo-v3-citas-vemos-mujer'),
+  ('bardo-v3-citas-fueguitos-hombre'),
+  ('bardo-v3-citas-no-propone-mujer'),
+  ('bardo-v3-citas-paga-hombre'),
+  ('bardo-v3-citas-paga-mujer'),
+  ('bardo-v3-citas-cara'),
+  ('bardo-v3-citas-ex'),
+  ('bardo-v3-amigos-chaparse'),
+  ('bardo-v3-amigos-ex'),
+  ('bardo-v3-amigos-secreto'),
+  ('bardo-v3-amigos-engano'),
+  ('bardo-v3-amigos-defender'),
+  ('bardo-v3-amigos-desaparece'),
+  ('bardo-v3-amigos-vuelve'),
+  ('bardo-v3-amigos-extra'),
+  ('bardo-v3-amigos-hablar-mal'),
+  ('bardo-v3-amigos-pelea-pareja'),
+  ('bardo-v3-amigos-favores'),
+  ('bardo-v3-amigos-cumple'),
+  ('bardo-v3-amigos-deuda'),
+  ('bardo-v3-amigos-subgrupo'),
+  ('bardo-v3-amigos-inseguridad'),
+  ('bardo-v3-amigos-ex-mejor-amigo'),
+  ('bardo-v3-amigos-mudanza'),
+  ('bardo-v3-redes-historia-visto'),
+  ('bardo-v3-redes-indirectas'),
+  ('bardo-v3-redes-capturas'),
+  ('bardo-v3-redes-cuenta-falsa'),
+  ('bardo-v3-redes-mejores-amigos'),
+  ('bardo-v3-redes-comentario'),
+  ('bardo-v3-redes-likes'),
+  ('bardo-v3-redes-foto'),
+  ('bardo-v3-redes-memes'),
+  ('bardo-v3-redes-historia-mensajes'),
+  ('bardo-v3-redes-ultima-conexion'),
+  ('bardo-v3-redes-audio-privado'),
+  ('bardo-v3-redes-indirecta-destino'),
+  ('bardo-v3-redes-historia-vistas'),
+  ('bardo-v3-redes-ex-perfil'),
+  ('bardo-v3-gym-ropa-ajustada'),
+  ('bardo-v3-gym-entrenamientos'),
+  ('bardo-v3-gym-filmar'),
+  ('bardo-v3-gym-consejos'),
+  ('bardo-v3-gym-remera'),
+  ('bardo-v3-gym-foto-serie'),
+  ('bardo-v3-gym-perfume'),
+  ('bardo-v3-gym-tecnica'),
+  ('bardo-v3-gym-cambio-fisico'),
+  ('bardo-v3-gym-dos-maquinas'),
+  ('bardo-v3-gym-levantar'),
+  ('bardo-v3-gym-cuerpo'),
+  ('bardo-v3-salidas-cuenta'),
+  ('bardo-v3-salidas-pone-mas'),
+  ('bardo-v3-salidas-deuda'),
+  ('bardo-v3-salidas-prestado'),
+  ('bardo-v3-salidas-tarde-hielo'),
+  ('bardo-v3-salidas-cancelar'),
+  ('bardo-v3-salidas-extra'),
+  ('bardo-v3-salidas-temprano'),
+  ('bardo-v3-salidas-propina'),
+  ('bardo-v3-salidas-bar-caro'),
+  ('bardo-v3-salidas-casa'),
+  ('bardo-v3-salidas-ronda'),
+  ('bardo-v3-salidas-vuelto'),
+  ('bardo-v3-vida-tp'),
+  ('bardo-v3-vida-ia'),
+  ('bardo-v3-vida-urgente'),
+  ('bardo-v3-vida-apuntes'),
+  ('bardo-v3-vida-cocina'),
+  ('bardo-v3-vida-platos'),
+  ('bardo-v3-vida-home-office'),
+  ('bardo-v3-vida-corregir'),
+  ('bardo-v3-vida-itinerario'),
+  ('bardo-v3-vida-excursion'),
+  ('bardo-v3-vida-vacaciones'),
+  ('bardo-v3-vida-renunciar'),
+  ('bardo-v3-pareja-novia-salir-hombre'),
+  ('bardo-v3-pareja-exclusividad-ex-mujer'),
+  ('bardo-v3-pareja-exes-hombre'),
+  ('bardo-v3-pareja-vuelve-celos-mujer'),
+  ('bardo-v3-pareja-ropa-hombre'),
+  ('bardo-v3-pareja-instagram-ex-mujer'),
+  ('bardo-v3-pareja-hablar-otra-persona'),
+  ('bardo-v3-salidas-sin-pareja'),
+  ('bardo-v3-amigos-ocultan-grupo'),
+  ('bardo-v3-amigos-yo-soy-asi'),
+  ('bardo-v3-pareja-coquetea-instagram'),
+  ('bardo-v3-pareja-plan-b'),
+  ('bardo-v4-deporte-messi-arruino-su-reputacion-perdiendo-la-final'),
+  ('bardo-v4-sociedad-deberian-permitir-la-pena-de-muerte-a'),
+  ('bardo-v4-sociedad-las-mujeres-pueden-hacer-varias-tareas-a'),
+  ('bardo-v4-sociedad-el-hombre-es-mil-veces-mejor-al'),
+  ('bardo-v4-pareja-casarse-esta-muy-pasado-de-moda'),
+  ('bardo-v4-pareja-regalarle-flores-a-tu-novia-es-muy'),
+  ('bardo-v4-citas-el-hombre-solo-se-rie-de-los'),
+  ('bardo-v4-sociedad-el-hombre-es-naturalmente-mas-aburrido-que'),
+  ('bardo-v4-amistades-existe-realmente-la-amistad-entre-hombre-y'),
+  ('bardo-v4-amistades-el-grupo-de-amigos-se-prioriza-antes'),
+  ('bardo-v4-citas-como-hombre-saldrias-con-una-mujer-que'),
+  ('bardo-v4-citas-como-mujer-saldrias-con-una-hombre-mas'),
+  ('bardo-v4-citas-18-y-25-anos-es-una-brecha'),
+  ('bardo-v4-pareja-se-justifica-posponer-un-sueno-meta-por'),
+  ('bardo-v4-sociedad-deberian-los-hombres-animarse-a-mostrar-su'),
+  ('bardo-v4-citas-que-es-mas-satisfactorio-tener-o-provocar'),
+  ('bardo-v4-citas-que-preferis-dejar-o-que-te-dejen'),
+  ('bardo-v4-valores-que-es-mejor-cumplir-tu-mayor-deseo'),
+  ('bardo-v4-citas-es-peor-que-tus-viejos-te-encuentren'),
+  ('bardo-v4-citas-cojerse-a-la-persona-que-tenes-al'),
+  ('bardo-v4-sociedad-hombre-hetero-que-gime-durante-el-sexo'),
+  ('bardo-v4-salidas-decir-que-sos-vegano-vegetariano-en-pleno'),
+  ('bardo-v4-salidas-tomar-mate-dulce-es-mejor-que-amargo'),
+  ('bardo-v4-vida-copiarse-en-un-parcial-se-justifica-si'),
+  ('bardo-v4-amistades-esta-bien-inventar-una-excusa-para-no'),
+  ('bardo-v4-valores-si-nadie-se-entera-de-una-cagada'),
+  ('bardo-v4-valores-esta-mal-priorizarse-a-uno-mismo-aunque'),
+  ('bardo-v4-valores-perdonar-una-traicion-te-hace-maduro-o'),
+  ('bardo-v4-valores-ser-brutalmente-honesto-con-alguien-es-ser'),
+  ('bardo-v4-deporte-el-que-se-enoja-por-perder-en'),
+  ('bardo-v4-citas-sexo-entre-amigos-fortalece-la-amistad'),
+  ('bardo-v4-citas-cuando-un-hombre-se-mete-en-el'),
+  ('bardo-v4-amistades-invitar-a-alguien-por-compromiso-es-peor'),
+  ('bardo-v4-amistades-desaparecer-del-grupo-por-estar-de-novio'),
+  ('bardo-v4-salidas-pedir-lo-mas-caro-y-dividir-todo'),
+  ('bardo-v4-salidas-no-dejar-propina-cuando-el-servicio-fue'),
+  ('bardo-v4-salidas-cancelar-un-plan-el-mismo-dia-habilita'),
+  ('bardo-v4-redes-mandar-un-audio-de-mas-de-tres'),
+  ('bardo-v4-vida-llegar-temprano-a-todo-es-ser-responsable'),
+  ('bardo-v4-vida-dormir-siesta-todos-los-dias-es-aprovechar'),
+  ('bardo-v4-vida-el-que-no-sabe-cocinar-deberia-aprender'),
+  ('bardo-v4-valores-ser-fanatico-de-algo-al-extremo-siempre'),
+  ('bardo-v4-amistades-un-amigo-que-siempre-llega-tarde-merece'),
+  ('bardo-v4-amistades-el-que-desaparece-meses-y-vuelve-con'),
+  ('bardo-v4-salidas-el-que-pide-delivery-para-todos-deberia'),
+  ('bardo-v4-salidas-quedarse-con-el-cambio-de-una-compra'),
+  ('bardo-v4-salidas-el-que-propone-un-lugar-caro-deberia'),
+  ('bardo-v4-salidas-llevar-tu-propia-bebida-a-una-previa'),
+  ('bardo-v4-salidas-irse-sin-despedirte-para-no-hacer-escandalo'),
+  ('bardo-v4-redes-reaccionar-con-jajaja-a-un-problema-serio'),
+  ('bardo-v4-redes-tener-500-notificaciones-sin-leer-es-ser'),
+  ('bardo-v4-redes-mandar-un-tiktok-sin-contexto-es-una'),
+  ('bardo-v4-gym-editar-demasiado-una-foto-antes-de-subirla'),
+  ('bardo-v4-vida-llegar-sin-leer-la-consigna-y-preguntar'),
+  ('bardo-v4-vida-dormir-hasta-tarde-un-domingo-es-descansar'),
+  ('bardo-v4-vida-tener-la-pieza-desordenada-dice-algo-de'),
+  ('bardo-v4-valores-cambiar-de-opinion-seguido-es-madurar-o'),
+  ('bardo-v4-vida-dejar-la-ropa-sobre-la-silla-cuenta'),
+  ('bardo-v4-vida-el-que-pone-musica-fuerte-en-la'),
+  ('bardo-v4-salidas-llegar-cinco-minutitos-tarde-siempre-termina-siendo'),
+  ('bardo-v4-vida-usar-el-bano-mas-de-media-hora'),
+  ('bardo-v4-vida-pedir-wi-fi-apenas-llegas-a-una'),
+  ('bardo-v4-salidas-poner-mayonesa-a-todo-arruina-la-comida'),
+  ('bardo-v4-salidas-comer-la-ultima-porcion-sin-preguntar-es'),
+  ('bardo-v4-deporte-el-que-reclama-todas-las-faltas-en'),
+  ('bardo-v4-deporte-perder-por-goleada-y-decir-era-para'),
+  ('bardo-v4-gym-ir-al-gimnasio-sin-entrenar-piernas-es')
+)
+update public.prompts as prompt
+set status = 'archived'
+where prompt.intensity = 'bardo'
+  and prompt.status <> 'archived'
+  and not exists (select 1 from desired where desired.id = prompt.id);
+
+-- Bardo mezcla activas y reservas desde el primer reparto. Tranqui mantiene sus
+-- etapas actuales. Los últimos cinco IDs se siguen demorando entre partidas.
+create or replace function public.build_prompt_deck(
+  p_room uuid,
+  p_intensity text,
+  p_stage text,
+  p_history text[] default '{}'::text[],
+  p_cycle integer default 1
+) returns text[] language sql stable security definer set search_path=public as $$
+  with candidates as (
+    select p.id,
+      case when p.id=any(coalesce(p_history,'{}'::text[])) then 1 else 0 end as delayed,
+      md5(p_room::text||':'||p_intensity||':'||p_stage||':'||p_cycle::text||':'||p.id) as sort_key
+    from public.prompts p
+    where p.intensity=p_intensity
+      and p.status<>'archived'
+      and (
+        (p_intensity='bardo' and p.status in ('active','reserve'))
+        or (p_intensity<>'bardo' and (
+          (p_stage='active' and p.status='active')
+          or (p_stage='reserve' and p.status='reserve')
+          or (p_stage='repeat' and p.status in ('active','reserve'))
+        ))
+      )
+  )
+  select coalesce(array_agg(id order by delayed,sort_key),array[]::text[]) from candidates
+$$;
+
+create or replace function public.deal_prompt(p_room uuid,p_intensity text) returns text language plpgsql security definer set search_path=public as $$
+declare
+  d public.prompt_decks;
+  chosen text;
+  chosen_position integer;
+  recent text[];
+  used_categories text[];
+  latest_round integer;
+  exclude_current boolean;
+  displaced text;
+  has_playable boolean;
+  exhausted boolean;
+begin
+  select * into d from public.prompt_decks where room_id=p_room and intensity=p_intensity for update;
+  if not found then
+    insert into public.prompt_decks(room_id,intensity,deck,cursor,history,cycle,stage)
+      values(p_room,p_intensity,public.build_prompt_deck(p_room,p_intensity,case when p_intensity='bardo' then 'repeat' else 'active' end,'{}'::text[],1),0,'{}'::text[],1,case when p_intensity='bardo' then 'repeat' else 'active' end)
+      returning * into d;
+  end if;
+
+  loop
+    select exists(
+      select 1 from generate_subscripts(d.deck,1) i
+      join public.prompts p on p.id=d.deck[i]
+      where i>d.cursor and p.status<>'archived'
+    ) into has_playable;
+    exit when has_playable;
+
+    exhausted:=d.cursor>=coalesce(array_length(d.deck,1),0);
+    if exhausted then
+      d.stage:=case when p_intensity='bardo' then 'repeat' when d.stage='active' then 'reserve' else 'repeat' end;
+      d.cycle:=d.cycle+1;
+    end if;
+    d.deck:=public.build_prompt_deck(p_room,p_intensity,d.stage,d.history,d.cycle);
+    d.cursor:=0;
+    if coalesce(array_length(d.deck,1),0)=0 then
+      if p_intensity='bardo' or d.stage='repeat' then
+        raise exception 'No hay consignas disponibles para %',p_intensity;
+      elsif d.stage='active' then
+        d.stage:='reserve'; d.cycle:=d.cycle+1;
+      else
+        d.stage:='repeat'; d.cycle:=d.cycle+1;
+      end if;
+      d.deck:=public.build_prompt_deck(p_room,p_intensity,d.stage,d.history,d.cycle);
+    end if;
+    update public.prompt_decks set deck=d.deck,cursor=d.cursor,history=d.history,cycle=d.cycle,stage=d.stage where room_id=p_room and intensity=p_intensity;
+  end loop;
+
+  recent:=case when coalesce(array_length(d.history,1),0)>0
+    then d.history[greatest(array_length(d.history,1)-coalesce((select count(*) from public.rounds where room_id=p_room),0)-4,1):array_length(d.history,1)] else array[]::text[] end;
+  select max(number) into latest_round from public.rounds where room_id=p_room;
+  select exists(
+    select 1 from public.rounds
+    where room_id=p_room and number=latest_round and phase='debating'
+  ) into exclude_current;
+  select coalesce(array_agg(distinct p.category),array[]::text[]) into used_categories
+  from public.rounds r
+  join public.prompts p on p.id=r.prompt_id
+  where r.room_id=p_room
+    and r.number <= coalesce(latest_round,0) - case when exclude_current then 1 else 0 end;
+
+  -- Primera opción: otra pregunta, fuera de las cinco recientes y de una
+  -- categoría no usada en esta partida. Sólo si no alcanza se degrada el filtro
+  -- de categoría; la protección de preguntas recientes se conserva.
+  select d.deck[i],i into chosen,chosen_position
+  from generate_subscripts(d.deck,1) i join public.prompts p on p.id=d.deck[i]
+  where i>d.cursor and p.status<>'archived'
+    and not(d.deck[i]=any(recent))
+    and not(p.category=any(used_categories))
+  order by i limit 1;
+  if chosen is null then
+    select d.deck[i],i into chosen,chosen_position
+    from generate_subscripts(d.deck,1) i join public.prompts p on p.id=d.deck[i]
+    where i>d.cursor and p.status<>'archived' and not(d.deck[i]=any(recent))
+    order by i limit 1;
+  end if;
+  if chosen is null then
+    select d.deck[i],i into chosen,chosen_position
+    from generate_subscripts(d.deck,1) i join public.prompts p on p.id=d.deck[i]
+    where i>d.cursor and p.status<>'archived'
+    order by i limit 1;
+  end if;
+  if chosen is null then raise exception 'No hay consignas disponibles para %',p_intensity; end if;
+
+  displaced:=d.deck[d.cursor+1];
+  d.deck[d.cursor+1]:=chosen;
+  d.deck[chosen_position]:=case when chosen_position=d.cursor+1 then chosen else displaced end;
+  d.cursor:=d.cursor+1;
+  d.history:=array_append(d.history,chosen);
+  update public.prompt_decks set deck=d.deck,cursor=d.cursor,history=d.history,cycle=d.cycle,stage=d.stage where room_id=p_room and intensity=p_intensity;
+  return chosen;
+end $$;
+
+-- Las salas existentes reciben un mazo Bardo nuevo, manteniendo su historial
+-- para que las cinco últimas cartas sigan protegidas.
+update public.prompt_decks as deck
+set deck = public.build_prompt_deck(deck.room_id,'bardo','repeat',deck.history,deck.cycle),
+    cursor = 0,
+    stage = 'repeat'
+where deck.intensity = 'bardo';
+
+revoke execute on function public.build_prompt_deck(uuid,text,text,text[],integer) from public,anon,authenticated;

@@ -13,7 +13,7 @@ const resilienceMigration = readFileSync(resolve(process.cwd(), 'supabase/migrat
 const joinRoomGrantFix = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130005_fix_join_room_grant.sql'), 'utf8')
 const launchEventsMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608130006_add_launch_events.sql'), 'utf8')
 const v2Migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608160001_contramano_v2_content_and_decks.sql'), 'utf8')
-const v3Migration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608170001_bardo_v3_catalog.sql'), 'utf8')
+const normalizedBardoMigration = readFileSync(resolve(process.cwd(), 'supabase/migrations/202608250001_normalize_bardo_catalog.sql'), 'utf8')
 
 describe('migraciones Supabase de rondas', () => {
   it('inserta jurados con rol explícito en instalaciones nuevas y existentes', () => {
@@ -39,13 +39,13 @@ describe('migraciones Supabase de rondas', () => {
     ;(['tranqui', 'bardo'] as const).forEach((intensity) => {
       expect(rows.filter((row) => row[3] === intensity && row[4] === 'active')).toHaveLength(60)
       expect(rows.filter((row) => row[3] === intensity && row[4] === 'reserve')).toHaveLength(20)
-      expect(activePrompts(intensity)).toHaveLength(intensity === 'tranqui' ? 60 : 100)
+      expect(activePrompts(intensity)).toHaveLength(intensity === 'tranqui' ? 60 : 99)
     })
     expect(editorialCatalogMigration).toContain("update public.prompts set status='reserve'")
     expect(editorialCatalogMigration).toContain('on conflict (id) do update')
     expect(editorialCatalogMigration).not.toMatch(/\bdelete\s+from\b/i)
     expect(editorialCatalogMigration).not.toMatch(/row level security/i)
-    expect(promptPreviews).toHaveLength(420)
+    expect(promptPreviews).toHaveLength(487)
   })
 
   it('aplica la revisión de conflictos sin alterar IDs ni historial', () => {
@@ -127,20 +127,25 @@ describe('migraciones Supabase de rondas', () => {
     expect(v2Migration).not.toMatch(/disable row level security|drop policy|service_role/i)
   })
 
-  it('conserva los prompts históricos y sincroniza las 130 cartas Bardo V3 con mock', () => {
-    const rows = [...v3Migration.matchAll(/^\('([^']+)', '([^']+)', 'bardo', '(active|reserve)', '(neutral|dirigida_a_hombres|dirigida_a_mujeres)', '([^']+)', '([^']+)', '([^']+)'\)(?:,|$)/gm)]
-    expect(rows).toHaveLength(130)
-    expect(new Set(rows.map((row) => row[1])).size).toBe(130)
+  it('sincroniza el catálogo Bardo normalizado con la misma fuente local', () => {
+    const field = "((?:''|[^'])*)"
+    const rows = [...normalizedBardoMigration.matchAll(new RegExp(`^\\s+\\('${field}', '${field}', '(active|reserve|archived)', '(neutral|dirigida_a_hombres|dirigida_a_mujeres|archive|revisar)', '${field}', '${field}', '${field}'\\)(?:,|$)`, 'gm'))]
+    const decode = (value: string) => value.replaceAll("''", "'")
+    expect(rows).toHaveLength(197)
+    expect(new Set(rows.map((row) => row[1])).size).toBe(197)
     expect(rows.map((row) => ({
-      id: row[1], category: row[2], status: row[3], audienceType: row[4], text: row[5], sideA: row[6], sideB: row[7],
+      id: decode(row[1]), category: decode(row[2]), status: row[3], audienceType: row[4], text: decode(row[5]), sideA: decode(row[6]), sideB: decode(row[7]),
     }))).toEqual(bardoV3Prompts.map((prompt) => ({
       id: prompt.id, category: prompt.category, status: prompt.status, audienceType: prompt.audienceType, text: prompt.text, sideA: prompt.sideA, sideB: prompt.sideB,
     })))
-    expect(rows.filter((row) => row[3] === 'active')).toHaveLength(100)
-    expect(rows.filter((row) => row[3] === 'reserve')).toHaveLength(30)
-    expect(v3Migration).toContain("where intensity='bardo' and id not like 'bardo-v3-%'")
-    expect(v3Migration).toContain('on conflict (id) do update set')
-    expect(v3Migration).not.toMatch(/\bdelete\s+from\s+public\.(prompts|rounds|votes|players)/i)
-    expect(v3Migration).not.toMatch(/disable row level security|drop policy|service_role/i)
+    expect(rows.filter((row) => row[3] === 'active')).toHaveLength(99)
+    expect(rows.filter((row) => row[3] === 'reserve')).toHaveLength(97)
+    expect(rows.filter((row) => row[3] === 'archived')).toHaveLength(1)
+    expect(normalizedBardoMigration).toContain("(p_intensity='bardo' and p.status in ('active','reserve'))")
+    expect(normalizedBardoMigration).toContain('not(p.category=any(used_categories))')
+    expect(normalizedBardoMigration).toContain("set status = 'archived'")
+    expect(normalizedBardoMigration).toContain('on conflict (id) do update set')
+    expect(normalizedBardoMigration).not.toMatch(/\bdelete\s+from\s+public\.(prompts|rounds|votes|players)/i)
+    expect(normalizedBardoMigration).not.toMatch(/disable row level security|drop policy|service_role/i)
   })
 })

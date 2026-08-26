@@ -26,13 +26,13 @@ describe('mazo local persistente', () => {
     rounds.slice(1).forEach((round, index) => expect(round.prompt.category).not.toBe(rounds[index].prompt.category))
   })
 
-  it('aplica las mismas reglas de cinco rondas al catálogo Bardo V3', () => {
+  it('reparte cinco preguntas Bardo de categorías distintas en una partida', () => {
     const room = roomWithPlayers('bardo'); startMockGame(room.code, room.hostId, random)
     for (let index = 0; index < 4; index += 1) finishRound(room.code, room.hostId)
     const rounds = getMockRoom(room.code)!.rounds
-    expect(rounds.every((round) => round.promptId.startsWith('bardo-v3-'))).toBe(true)
+    expect(rounds.every((round) => round.prompt.intensity === 'bardo' && round.prompt.status !== 'archived')).toBe(true)
     expect(new Set(rounds.map((round) => round.promptId)).size).toBe(5)
-    rounds.slice(1).forEach((round, index) => expect(round.prompt.category).not.toBe(rounds[index].prompt.category))
+    expect(new Set(rounds.map((round) => round.prompt.category)).size).toBe(5)
   })
 
   it('crea una sala nueva al pedir revancha y no altera el historial original', () => {
@@ -46,7 +46,7 @@ describe('mazo local persistente', () => {
     for (let index = 0; index < 4; index += 1) finishRound(replay.code, replay.hostId)
     const nextFive = getMockRoom(replay.code)!.rounds.map((round) => round.promptId)
     expect(nextFive).toHaveLength(5)
-    expect(nextFive.every((id) => !firstFive.includes(id))).toBe(true)
+    expect(nextFive.filter((id) => firstFive.includes(id))).toEqual([])
   })
 
   it('evita las cinco consignas Bardo de la partida anterior al pedir revancha', () => {
@@ -109,26 +109,28 @@ describe('mazo local persistente', () => {
     expect(started.decks.tranqui.stage).toBe('reserve')
   })
 
-  it('usa reservas Bardo sólo después de agotar las 100 activas', () => {
+  it('mezcla activas y reservas Bardo desde el primer mazo', () => {
     const original = roomWithPlayers('bardo'); const room = getMockRoom(original.code)!
+    const reserve = promptsForIntensity('bardo').find((prompt) => prompt.status === 'reserve')!
+    const active = promptsForIntensity('bardo').find((prompt) => prompt.status === 'active')!
     room.decks.bardo = {
-      order: promptsForIntensity('bardo').filter((prompt) => prompt.status === 'active').map((prompt) => prompt.id),
-      cursor: 100,
+      order: [reserve.id, active.id],
+      cursor: 0,
       history: [],
       cycle: 1,
-      stage: 'active',
+      stage: 'repeat',
     }
     saveMockRoom(room)
     const started = startMockGame(room.code, room.hostId, random)!
-    expect(started.rounds[0].prompt.status).toBe('reserve')
-    expect(started.decks.bardo.stage).toBe('reserve')
+    expect(started.rounds[0].prompt).toMatchObject({ id: reserve.id, status: 'reserve' })
+    expect(started.decks.bardo.stage).toBe('repeat')
   })
 
   it('no selecciona IDs Bardo archivados aunque una sala guardada los conserve en su orden', () => {
     const original = roomWithPlayers('bardo'); const room = getMockRoom(original.code)!
     const archivedId = 'v2-pareja-ubicacion'
     const activeId = promptsForIntensity('bardo').find((prompt) => prompt.status === 'active')!.id
-    room.decks.bardo = { order: [archivedId, activeId], cursor: 0, history: [], cycle: 1, stage: 'active' }
+    room.decks.bardo = { order: [archivedId, activeId], cursor: 0, history: [], cycle: 1, stage: 'repeat' }
     saveMockRoom(room)
     const started = startMockGame(room.code, room.hostId, random)!
     expect(started.rounds[0].promptId).toBe(activeId)

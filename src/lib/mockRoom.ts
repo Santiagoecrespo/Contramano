@@ -25,14 +25,16 @@ function shuffled<T>(items: T[], random: Random): T[] {
 }
 
 function promptsForStage(intensity: Intensity, stage: DeckStage): PromptPreview[] {
-  return promptsForIntensity(intensity).filter((prompt) => stage === 'active'
+  return promptsForIntensity(intensity).filter((prompt) => intensity === 'bardo'
+    ? prompt.status === 'active' || prompt.status === 'reserve'
+    : stage === 'active'
     ? prompt.status === 'active'
     : stage === 'reserve'
       ? prompt.status === 'reserve'
       : prompt.status === 'active' || prompt.status === 'reserve')
 }
 
-function newDeck(intensity: Intensity, history: string[] = [], cycle = 1, random: Random = Math.random, stage: DeckStage = 'active'): MockDeck {
+function newDeck(intensity: Intensity, history: string[] = [], cycle = 1, random: Random = Math.random, stage: DeckStage = intensity === 'bardo' ? 'repeat' : 'active'): MockDeck {
   const recent = new Set(history.slice(-5))
   const eligible = promptsForStage(intensity, stage)
   const protectedIds = eligible.filter((prompt) => !recent.has(prompt.id)).map((prompt) => prompt.id)
@@ -50,6 +52,12 @@ function createDecks(random: Random = Math.random): MockRoom['decks'] {
 
 function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.random): PromptPreview {
   let deck = room.decks[intensity]
+  if (intensity === 'bardo' && deck.stage !== 'repeat') {
+    // Los mazos guardados antes de la normalización tenían sólo las activas.
+    // Se reconstruyen sin perder historial para mezclar activas y reservas.
+    deck = newDeck(intensity, deck.history, deck.cycle, random, 'repeat')
+    room.decks[intensity] = deck
+  }
   const hasPlayableAhead = (candidateDeck: MockDeck): boolean => candidateDeck.order.slice(candidateDeck.cursor)
     .some((promptId) => {
       const prompt = findPrompt(promptId)
@@ -66,19 +74,32 @@ function nextPrompt(room: MockRoom, intensity: Intensity, random: Random = Math.
     if (hasPlayableAhead(deck)) break
     if (deck.stage === 'repeat' || !promptsForStage(intensity, nextStage).length) throw new Error(`No hay consignas disponibles para ${intensity}.`)
   }
-  const recentIds = new Set(deck.history.slice(-5))
-  const lastCategory = deck.history.at(-1) ? findPrompt(deck.history.at(-1)!)?.category : undefined
+  // En una revancha, las cinco del juego anterior siguen protegidas mientras
+  // se completan las cinco nuevas. Durante una partida también evitamos toda
+  // repetición de pregunta, no sólo las cinco últimas del historial global.
+  const protectedHistoryStart = Math.max(0, deck.history.length - room.rounds.length - 5)
+  const recentIds = new Set(deck.history.slice(protectedHistoryStart))
+  const categoryRounds = room.phase === 'debating' ? room.rounds.slice(0, -1) : room.rounds
+  const usedCategories = new Set(categoryRounds.map((round) => round.prompt.category))
   let selectedIndex = deck.cursor
   for (let index = deck.cursor; index < deck.order.length; index += 1) {
     const candidate = findPrompt(deck.order[index])
     if (!candidate || candidate.status === 'archived') continue
-    if (!recentIds.has(candidate.id) && candidate.category !== lastCategory) { selectedIndex = index; break }
+    if (!recentIds.has(candidate.id) && !usedCategories.has(candidate.category)) { selectedIndex = index; break }
   }
-  if (selectedIndex === deck.cursor && lastCategory) {
+  if (selectedIndex === deck.cursor) {
+    // Degradación controlada: sólo se permite repetir categoría si ya no hay
+    // otra disponible. Las cinco últimas preguntas siguen protegidas.
     for (let index = deck.cursor; index < deck.order.length; index += 1) {
       const candidate = findPrompt(deck.order[index])
       if (!candidate || candidate.status === 'archived') continue
       if (!recentIds.has(candidate.id)) { selectedIndex = index; break }
+    }
+  }
+  if (selectedIndex === deck.cursor) {
+    for (let index = deck.cursor; index < deck.order.length; index += 1) {
+      const candidate = findPrompt(deck.order[index])
+      if (candidate && candidate.status !== 'archived') { selectedIndex = index; break }
     }
   }
   ;[deck.order[deck.cursor], deck.order[selectedIndex]] = [deck.order[selectedIndex], deck.order[deck.cursor]]

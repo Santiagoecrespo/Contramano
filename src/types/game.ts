@@ -1,6 +1,8 @@
 export type Intensity = 'tranqui' | 'bardo'
 export type PromptStatus = 'active' | 'reserve' | 'archived'
-export type PromptAudience = 'neutral' | 'dirigida_a_hombres' | 'dirigida_a_mujeres'
+// `archive` y `revisar` están presentes en la fuente editorial normalizada.
+// No alteran el reparto de cartas, pero se conservan para no perder metadatos.
+export type PromptAudience = 'neutral' | 'dirigida_a_hombres' | 'dirigida_a_mujeres' | 'archive' | 'revisar'
 export type DeckStage = 'active' | 'reserve' | 'repeat'
 export type GamePhase = 'lobby' | 'debating' | 'voting' | 'paused' | 'results' | 'finished'
 export type Side = 'A' | 'B'
