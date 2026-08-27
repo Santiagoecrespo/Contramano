@@ -1,4 +1,4 @@
-import { activePrompts } from '../data/prompts'
+import { promptsForIntensity } from '../data/prompts'
 import type { PromptPreview, Side } from '../types/game'
 
 export const LOCAL_DUEL_ROUND_COUNT = 5
@@ -29,17 +29,44 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
 }
 
 /**
- * El duelo usa el mazo Tranqui activo tal como ya existe. No escribe ni altera
- * el catálogo y devuelve una mano nueva sin cartas repetidas para cada partida.
+ * Cara a cara usa exclusivamente el catálogo Bardo vigente. Las cartas activas
+ * y de reserva participan con la misma prioridad; las archivadas, incompletas
+ * o de cualquier otra intensidad quedan afuera.
+ *
+ * Mientras haya cinco categorías disponibles, cada partida toma una carta de
+ * cinco categorías distintas. El segundo recorrido es un fallback defensivo:
+ * sólo permite repetir categoría si un catálogo futuro tuviera menos de cinco.
  */
 export function createLocalDuelDeck(random: () => number = Math.random): PromptPreview[] {
-  const availablePrompts = activePrompts('tranqui')
+  const availablePrompts = promptsForIntensity('bardo').filter((prompt) => (
+    (prompt.status === 'active' || prompt.status === 'reserve')
+    && prompt.text.trim().length > 0
+    && prompt.sideA.trim().length > 0
+    && prompt.sideB.trim().length > 0
+  ))
 
   if (availablePrompts.length < LOCAL_DUEL_ROUND_COUNT) {
-    throw new Error('No hay suficientes consignas activas para iniciar Cara a cara.')
+    throw new Error('No hay suficientes consignas Bardo para iniciar Cara a cara.')
   }
 
-  return shuffled(availablePrompts, random).slice(0, LOCAL_DUEL_ROUND_COUNT)
+  const shuffledPrompts = shuffled(availablePrompts, random)
+  const selected: PromptPreview[] = []
+  const selectedCategories = new Set<string>()
+
+  for (const prompt of shuffledPrompts) {
+    if (selectedCategories.has(prompt.category)) continue
+    selected.push(prompt)
+    selectedCategories.add(prompt.category)
+    if (selected.length === LOCAL_DUEL_ROUND_COUNT) return selected
+  }
+
+  for (const prompt of shuffledPrompts) {
+    if (selected.some((selectedPrompt) => selectedPrompt.id === prompt.id)) continue
+    selected.push(prompt)
+    if (selected.length === LOCAL_DUEL_ROUND_COUNT) return selected
+  }
+
+  throw new Error('No hay suficientes consignas Bardo distintas para iniciar Cara a cara.')
 }
 
 export function summarizeLocalDuel(rounds: readonly LocalDuelRound[]): LocalDuelSummary {
