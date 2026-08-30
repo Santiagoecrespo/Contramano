@@ -711,46 +711,46 @@ body:has(.landing-page) {
 .landing-page .steps p { color: #5f516d; }
 .landing-page .steps article > span { color: #d96d27; }
 
-/* Landing: una paleta mate y tipografía más tranquila sobre el mismo fondo. */
-.app-shell:has(.landing-page) .site-header { border-bottom-color: rgb(65 68 77 / 23%); }
-.app-shell:has(.landing-page) .brand { color: #42444d; }
-.app-shell:has(.landing-page) .brand-mark { border-color: #42444d; background: #e8dcd4; box-shadow: none; }
-.app-shell:has(.landing-page) .header-note { color: #696d78; font-size: .95rem; }
-.landing-page .hero-copy, .landing-page .how-it-works { color: #42444d; }
-.landing-page .eyebrow, .landing-page .how-it-works .eyebrow { color: #877b9b; }
-.landing-page .hero h1 em { color: #877b9b; text-shadow: none; }
-.landing-page .hero-text { color: #5f6470; font-size: clamp(1.05rem, 1.8vw, 1.2rem); font-weight: 500; line-height: 1.5; }
-.landing-page .hero::before { border-color: rgb(135 123 155 / 36%); background: rgb(214 207 225 / 62%); box-shadow: none; }
-.landing-page .hero::after { border-color: rgb(190 131 111 / 32%); background: rgb(240 217 207 / 58%); box-shadow: none; }
-.landing-page .mode-card { border: 1px solid rgb(65 68 77 / 32%); box-shadow: 0 9px 24px rgb(63 67 77 / 12%); color: #42444d; }
-.landing-page .mode-online { background: #dce7e9; }
-.landing-page .mode-duel { background: #efdcd4; }
-.landing-page .mode-card::after { border-color: rgb(65 68 77 / 28%); opacity: .28; }
-.landing-page .mode-card:hover { transform: translateY(-3px) rotate(-.25deg); box-shadow: 0 14px 28px rgb(135 123 155 / 21%); }
-.landing-page .mode-duel:hover { transform: translateY(-3px) rotate(.25deg); box-shadow: 0 14px 28px rgb(190 131 111 / 20%); }
-.landing-page .mode-chip { border: 1px solid #5a5d66; background: rgb(255 255 255 / 72%); color: #4b4e57; }
-.landing-page .mode-icon { border-color: #5a5d66; background: rgb(255 255 255 / 78%); box-shadow: none; color: #5a5d66; }
+/* Landing: colores pastel vivos, sin recuperar el azul oscuro del juego. */
+.app-shell:has(.landing-page) .site-header { border-bottom-color: rgb(53 55 68 / 26%); }
+.app-shell:has(.landing-page) .brand { color: #353744; }
+.app-shell:has(.landing-page) .brand-mark { border-color: #353744; background: #ffe17c; box-shadow: 3px 3px 0 #df668e; }
+.app-shell:has(.landing-page) .header-note { color: #626776; font-size: .95rem; }
+.landing-page .hero-copy, .landing-page .how-it-works { color: #353744; }
+.landing-page .eyebrow, .landing-page .how-it-works .eyebrow { color: #b45698; }
+.landing-page .hero h1 em { color: #cb5d8e; text-shadow: 0 3px 0 rgb(255 255 255 / 62%); }
+.landing-page .hero-text { color: #555d6d; font-size: clamp(1.05rem, 1.8vw, 1.2rem); font-weight: 500; line-height: 1.5; }
+.landing-page .hero::before { border-color: rgb(107 215 235 / 58%); background: rgb(116 218 237 / 47%); box-shadow: 0 0 0 9px rgb(116 218 237 / 13%); }
+.landing-page .hero::after { border-color: rgb(223 102 142 / 46%); background: rgb(255 166 183 / 52%); box-shadow: 0 0 0 7px rgb(255 166 183 / 12%); }
+.landing-page .mode-card { border: 1px solid rgb(53 55 68 / 40%); box-shadow: 0 10px 24px rgb(53 55 68 / 13%); color: #353744; }
+.landing-page .mode-online { background: linear-gradient(135deg, #6dd9ed, #b4eef5); }
+.landing-page .mode-duel { background: linear-gradient(135deg, #ff91ad, #ffc7b4); }
+.landing-page .mode-card::after { border-color: rgb(53 55 68 / 34%); opacity: .36; }
+.landing-page .mode-card:hover { transform: translateY(-4px) rotate(-.35deg); box-shadow: 0 16px 30px rgb(89 183 206 / 26%); }
+.landing-page .mode-duel:hover { transform: translateY(-4px) rotate(.35deg); box-shadow: 0 16px 30px rgb(220 91 133 / 25%); }
+.landing-page .mode-chip { border: 1px solid #545565; background: rgb(255 255 255 / 84%); color: #454756; }
+.landing-page .mode-icon { border-color: #545565; background: rgb(255 255 255 / 87%); box-shadow: 2px 2px 0 rgb(53 55 68 / 23%); color: #454756; }
 .landing-page .mode-card-title { font-size: clamp(1.45rem, 2vw, 1.72rem); }
-.landing-page .mode-card small { color: #555b66; font-size: 1rem; font-weight: 500; line-height: 1.38; }
-.landing-page .hero-actions .button { border: 1px solid rgb(65 68 77 / 46%); background: rgb(255 255 255 / 68%); color: #42444d; font-size: 1rem; }
-.landing-page .microcopy { color: #676c76; font-size: 1rem; }
-.landing-page .hero-debate-card { border: 1px solid rgb(65 68 77 / 37%); background: #f0dfd8; box-shadow: 0 18px 35px rgb(65 68 77 / 15%); transform: rotate(1.8deg) translateY(-5px); }
-.landing-page .hero-debate-card::before { border-color: rgb(65 68 77 / 28%); background: #d9e4e6; }
-.landing-page .hero-debate-card .prompt-topline, .landing-page .hero-debate-card > p { color: #42444d; }
-.landing-page .hero-debate-card .tag { border-color: #6d627d; background: rgb(255 255 255 / 70%); color: #625574; }
-.landing-page .hero-debate-card .card-edition { color: rgb(65 68 77 / 55%); }
-.landing-page .hero-debate-card .sides span { border: 1px solid rgb(65 68 77 / 43%); background: rgb(255 255 255 / 72%); color: #42444d; font-size: 1rem; }
-.landing-page .hero-debate-card .sides span:first-child { background: #d9e4e6; }
-.landing-page .hero-debate-card .scribble { color: #7b6b91; }
-.landing-page .how-it-works { padding: clamp(34px, 5vw, 58px); border: 1px solid rgb(65 68 77 / 20%); border-radius: 24px 14px 24px 14px; background: rgb(255 255 255 / 43%); box-shadow: 0 12px 28px rgb(65 68 77 / 8%); }
-.landing-page .how-it-works h2 { max-width: 620px; color: #42444d; font-size: clamp(2.35rem, 4vw, 3.3rem); line-height: 1; }
-.landing-page .how-it-works, .landing-page .steps { border-color: rgb(65 68 77 / 20%); }
-.landing-page .steps article, .landing-page .steps article + article { border-color: rgb(65 68 77 / 17%); }
-.landing-page .steps b, .landing-page .steps article > span { color: #b77e6d; }
+.landing-page .mode-card small { color: #424957; font-size: 1rem; font-weight: 600; line-height: 1.38; }
+.landing-page .hero-actions .button { border: 1px solid rgb(53 55 68 / 46%); background: rgb(255 255 255 / 76%); color: #353744; font-size: 1rem; }
+.landing-page .microcopy { color: #596170; font-size: 1rem; }
+.landing-page .hero-debate-card { border: 2px solid rgb(53 55 68 / 60%); background: linear-gradient(138deg, #ffe078, #ffb087 57%, #ff9cb2); box-shadow: 9px 11px 0 #75d9e8, 0 17px 31px rgb(211 89 134 / 20%); transform: rotate(1.8deg) translateY(-5px); }
+.landing-page .hero-debate-card::before { border-color: rgb(53 55 68 / 46%); background: #83e1ef; }
+.landing-page .hero-debate-card .prompt-topline, .landing-page .hero-debate-card > p { color: #353744; }
+.landing-page .hero-debate-card .tag { border-color: #5b526d; background: rgb(255 255 255 / 82%); color: #554766; }
+.landing-page .hero-debate-card .card-edition { color: rgb(53 55 68 / 62%); }
+.landing-page .hero-debate-card .sides span { border: 2px solid rgb(53 55 68 / 65%); background: rgb(255 255 255 / 86%); color: #353744; font-size: 1rem; }
+.landing-page .hero-debate-card .sides span:first-child { background: #86e2f0; }
+.landing-page .hero-debate-card .scribble { color: #a64f85; }
+.landing-page .how-it-works { padding: clamp(34px, 5vw, 58px); border: 1px solid rgb(223 102 142 / 35%); border-radius: 24px 14px 24px 14px; background: rgb(255 255 255 / 55%); box-shadow: 0 15px 31px rgb(213 97 143 / 14%); }
+.landing-page .how-it-works h2 { max-width: 620px; color: #353744; font-size: clamp(2.35rem, 4vw, 3.3rem); line-height: 1; }
+.landing-page .how-it-works, .landing-page .steps { border-color: rgb(53 55 68 / 22%); }
+.landing-page .steps article, .landing-page .steps article + article { border-color: rgb(53 55 68 / 18%); }
+.landing-page .steps b, .landing-page .steps article > span { color: #d76491; }
 .landing-page .steps h3 { font-size: 1.35rem; }
 .landing-page .steps p { color: #5f6470; font-size: 1rem; line-height: 1.48; }
-.landing-cursor { border-color: #5a5d66; background: #e8dcd4; color: #4b4e57; }
-.landing-cursor.is-active { background: #f5f2ef; box-shadow: 0 0 0 3px rgb(135 123 155 / 18%); }
+.landing-cursor { border-color: #545565; background: #ffe17c; color: #454756; }
+.landing-cursor.is-active { background: #fff9ed; box-shadow: 0 0 0 3px rgb(223 102 142 / 24%); }
 
 @media (max-width: 760px) {
   .app-shell:has(.landing-page) .header-note { font-size: .78rem; }
